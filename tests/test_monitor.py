@@ -190,7 +190,14 @@ class TestMonitor(UptimeKumaTestCase):
             "hostname": "127.0.0.1",
             "port": 8888,
             "dns_resolve_server": "1.1.1.1",
-            "dns_resolve_type": "A"
+            "dns_resolve_type": "A",
+            "conditions": [{
+                "type": "expression",
+                "variable": "record",
+                "operator": "equals",
+                "value": "127.0.0.1",
+                "andOr": "and"
+            }],
         }
         self.do_test_monitor_type(expected_monitor)
 

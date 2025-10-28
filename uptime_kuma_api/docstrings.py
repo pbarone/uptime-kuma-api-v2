@@ -68,6 +68,7 @@ def monitor_docstring(mode) -> str:
             - "SOA"
             - "SRV"
             - "TXT"
+        :param list, optional conditions: One or more groups of DNS record conditions which will be validated during uptime tests, defaults to ``[]``.
         :param str, optional mqttUsername: MQTT Username, defaults to None
         :param str, optional mqttPassword: MQTT Password, defaults to None
         :param str, optional mqttTopic: MQTT Topic, defaults to None

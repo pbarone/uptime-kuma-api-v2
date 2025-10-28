@@ -751,6 +751,7 @@ class UptimeKumaApi(object):
             # DNS
             dns_resolve_server: str = "1.1.1.1",
             dns_resolve_type: str = "A",
+            conditions: list = [],
 
             # MQTT
             mqttUsername: str = "",
@@ -914,6 +915,7 @@ class UptimeKumaApi(object):
         data.update({
             "dns_resolve_server": dns_resolve_server,
             "dns_resolve_type": dns_resolve_type,
+            "conditions": conditions,
         })
 
         # MQTT
@@ -1118,6 +1120,7 @@ class UptimeKumaApi(object):
                     'dns_last_result': None,
                     'dns_resolve_server': '1.1.1.1',
                     'dns_resolve_type': 'A',
+                    'conditions': [],
                     'docker_container': None,
                     'docker_host': None,
                     'expiryNotification': False,
@@ -1211,6 +1214,7 @@ class UptimeKumaApi(object):
                 'dns_last_result': None,
                 'dns_resolve_server': '1.1.1.1',
                 'dns_resolve_type': 'A',
+                'conditions': [],
                 'docker_container': None,
                 'docker_host': None,
                 'expectedValue': None,
