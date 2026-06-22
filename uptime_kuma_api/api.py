@@ -696,6 +696,7 @@ class UptimeKumaApi(object):
             upsideDown: bool = False,
             notificationIDList: list = None,
             httpBodyEncoding: str = "json",
+            conditions: list = None,
 
             # HTTP, KEYWORD, JSON_QUERY, REAL_BROWSER
             url: str = None,
@@ -797,6 +798,9 @@ class UptimeKumaApi(object):
         if notificationIDList is None:
             notificationIDList = {}
 
+        if conditions is not None and not isinstance(conditions, list):
+            raise TypeError("conditions must be a list or None")
+
         data = {
             "type": type,
             "name": name,
@@ -808,6 +812,7 @@ class UptimeKumaApi(object):
             "resendInterval": resendInterval,
             "description": description,
             "httpBodyEncoding": httpBodyEncoding,
+            "conditions": conditions if conditions is not None else [],
         }
 
         if parse_version(self.version) >= parse_version("1.22"):
@@ -1118,6 +1123,7 @@ class UptimeKumaApi(object):
                     'dns_last_result': None,
                     'dns_resolve_server': '1.1.1.1',
                     'dns_resolve_type': 'A',
+                    'conditions': [],
                     'docker_container': None,
                     'docker_host': None,
                     'expiryNotification': False,
@@ -1211,6 +1217,7 @@ class UptimeKumaApi(object):
                 'dns_last_result': None,
                 'dns_resolve_server': '1.1.1.1',
                 'dns_resolve_type': 'A',
+                'conditions': [],
                 'docker_container': None,
                 'docker_host': None,
                 'expectedValue': None,
@@ -2130,6 +2137,7 @@ class UptimeKumaApi(object):
         status_page = self.get_status_page(slug)
         status_page.pop("incident")
         status_page.pop("maintenanceList")
+        status_page.pop("autoRefreshInterval", None)
         status_page.update(kwargs)
         data = self._build_status_page_data(**status_page)
         r = self._call('saveStatusPage', data)

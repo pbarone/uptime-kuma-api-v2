@@ -1,5 +1,17 @@
 ## Changelog
 
+### Release 2.0.0
+
+#### Features
+- add support for Uptime Kuma 2.0.0 - 2.4.0
+- add `conditions` parameter to `add_monitor` and `edit_monitor` for all monitor types
+- incorporate upstream PR #87 (fix status page save for v2)
+- incorporate upstream PR #88 (add conditions support for DNS monitors)
+
+#### Bugfixes
+- fix `SQLITE_CONSTRAINT: NOT NULL constraint failed: monitor.conditions` error on v2
+- fix `save_status_page` TypeError caused by removed `autoRefreshInterval` field in v2
+
 ### Release 1.2.1
 
 #### Bugfixes

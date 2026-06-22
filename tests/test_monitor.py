@@ -190,7 +190,14 @@ class TestMonitor(UptimeKumaTestCase):
             "hostname": "127.0.0.1",
             "port": 8888,
             "dns_resolve_server": "1.1.1.1",
-            "dns_resolve_type": "A"
+            "dns_resolve_type": "A",
+            "conditions": [{
+                "type": "expression",
+                "variable": "record",
+                "operator": "equals",
+                "value": "127.0.0.1",
+                "andOr": "and"
+            }],
         }
         self.do_test_monitor_type(expected_monitor)
 
@@ -368,6 +375,36 @@ class TestMonitor(UptimeKumaTestCase):
             "type": MonitorType.TAILSCALE_PING,
             "name": "monitor 1",
             "hostname": "127.0.0.1"
+        }
+        self.do_test_monitor_type(expected_monitor)
+
+    def test_monitor_conditions(self):
+        if parse_version(self.api.version) < parse_version("2.0"):
+            self.skipTest("Unsupported in this Uptime Kuma version")
+
+        expected_monitor = {
+            "type": MonitorType.HTTP,
+            "name": "monitor 1",
+            "url": "http://127.0.0.1",
+            "conditions": [
+                {"type": "expression", "variable": "response_status", "operator": "==", "value": "200", "andOr": ""}
+            ]
+        }
+        self.do_test_monitor_type(expected_monitor)
+
+    def test_monitor_dns_conditions(self):
+        if parse_version(self.api.version) < parse_version("2.0"):
+            self.skipTest("Unsupported in this Uptime Kuma version")
+
+        expected_monitor = {
+            "type": MonitorType.DNS,
+            "name": "monitor 1",
+            "hostname": "example.com",
+            "dns_resolve_server": "1.1.1.1",
+            "dns_resolve_type": "A",
+            "conditions": [
+                {"type": "expression", "variable": "record", "operator": "contains", "value": "1.2.3.4", "andOr": ""}
+            ]
         }
         self.do_test_monitor_type(expected_monitor)
 

@@ -26,6 +26,7 @@ def monitor_docstring(mode) -> str:
         :param int, optional maxretries: Retries. Maximum retries before the service is marked as down and a notification is sent., defaults to 0
         :param bool, optional upsideDown: Upside Down Mode. Flip the status upside down. If the service is reachable, it is DOWN., defaults to False
         :param list, optional notificationIDList: Notifications, defaults to None
+        :param list, optional conditions: Conditions for monitor validation (e.g., expected DNS records, response assertions). Each condition is a dict with fields: ``type``, ``variable``, ``operator``, ``value``, ``andOr``. Defaults to an empty list ``[]``.
         :param str, optional url: URL, defaults to None
         :param bool, optional expiryNotification: Certificate Expiry Notification, defaults to False
         :param bool, optional ignoreTls: Ignore TLS/SSL error for HTTPS websites, defaults to False
