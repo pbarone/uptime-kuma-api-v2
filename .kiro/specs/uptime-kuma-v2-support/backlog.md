@@ -98,9 +98,27 @@ v2 added 3 new notification providers:
 
 ---
 
+## Reference: Upstream PR #86 (markus-seidl)
+
+PR #86 (https://github.com/lucasheld/uptime-kuma-api/pull/86) by @markus-seidl adds many of the same v2 fields listed above. When implementing backlog items, cherry-pick or reference their implementation where applicable and credit @markus-seidl in commit messages.
+
+**Useful to cherry-pick from PR #86:**
+- 15 new monitor parameters (same fields listed in our "New Monitor Parameters" section)
+- `logger` parameter for `UptimeKumaApi.__init__` (passes logger to socketio client for debugging)
+- `MonitorBuilder` DTO class (380-line builder pattern for fluent monitor creation — optional ergonomics)
+
+**Do NOT adopt from PR #86:**
+- `get_monitors` refactor (changes event handling; author notes tests are "still flaky")
+- `conditions if conditions else list()` logic (bug: replaces intentional `[]` with new list)
+
+**PR #86 branch:** `pr-86` (fetched locally via `git fetch upstream refs/pull/86/head:pr-86`)
+
+---
+
 ## Prioritization Guide
 
-1. **Ship basic v2 compat first** (current scope: conditions + autoRefreshInterval)
-2. **Then**: `jsonPathOperator`, `ipFamily`, status page analytics fields
-3. **Then**: New monitor types (RabbitMQ, SNMP, SMTP)
-4. **Then**: Everything else based on user requests
+1. **Ship basic v2 compat first** (current scope: conditions + autoRefreshInterval) ✅ Done
+2. **Then**: `jsonPathOperator`, `ipFamily`, status page analytics fields (reference PR #86, credit @markus-seidl)
+3. **Then**: New monitor types — RabbitMQ, SNMP, SMTP (reference PR #86, credit @markus-seidl)
+4. **Then**: `logger` param, `MonitorBuilder` DTO (from PR #86, credit @markus-seidl)
+5. **Then**: Everything else based on user requests
