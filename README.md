@@ -21,12 +21,12 @@ Supported Uptime Kuma versions:
 
 Installation
 ---
-uptime-kuma-api-v2 is available on the [Python Package Index (PyPI)](https://pypi.org/project/uptime-kuma-api-v2/).
+uptime-kuma-api2 is available on the [Python Package Index (PyPI)](https://pypi.org/project/uptime-kuma-api2/).
 
 You can install it using pip:
 
 ```
-pip install uptime-kuma-api-v2
+pip install uptime-kuma-api2
 ```
 
 Documentation

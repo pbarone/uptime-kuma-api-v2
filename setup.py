@@ -19,7 +19,7 @@ with open("README.md", "r", "utf-8") as f:
     readme = f.read()
 
 setup(
-    name="uptime-kuma-api-v2",
+    name="uptime-kuma-api2",
     version=info["__version__"],
     description="A python wrapper for the Uptime Kuma WebSocket API (v2 support)",
     long_description=readme,
