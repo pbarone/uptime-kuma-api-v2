@@ -12,9 +12,9 @@ import uptime_kuma_api
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'uptime-kuma-api'
-copyright = '2023, Lucas Held'
-author = 'Lucas Held'
+project = 'uptime-kuma-api-v2'
+copyright = '2025, Paolo Barone'
+author = 'Paolo Barone'
 
 version = uptime_kuma_api.__version__
 release = uptime_kuma_api.__version__
@@ -43,8 +43,8 @@ html_static_path = ['_static']
 
 html_theme_options = {
     "show_powered_by": False,
-    "github_user": "lucasheld",
-    "github_repo": "uptime-kuma-api",
+    "github_user": "pbarone",
+    "github_repo": "uptime-kuma-api-v2",
     "github_banner": True,
     "show_related": False,
     "note_bg": "#FFF59C",

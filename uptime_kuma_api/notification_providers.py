@@ -19,6 +19,9 @@ class NotificationType(str, Enum):
     BARK = "Bark"
     """Bark"""
 
+    BREVO = "Brevo"
+    """Brevo"""
+
     CLICKSENDSMS = "clicksendsms"
     """ClickSend SMS"""
 
@@ -27,6 +30,9 @@ class NotificationType(str, Enum):
 
     DISCORD = "discord"
     """Discord"""
+
+    EVOLUTION_API = "evolution"
+    """Evolution API"""
 
     FEISHU = "Feishu"
     """Feishu"""
@@ -69,6 +75,9 @@ class NotificationType(str, Enum):
 
     MATTERMOST = "mattermost"
     """Mattermost"""
+
+    NEXTCLOUD_TALK = "nextcloudtalk"
+    """Nextcloud Talk"""
 
     NOSTR = "nostr"
     """Nostr"""
@@ -191,6 +200,15 @@ notification_provider_options = {
         barkGroup=dict(type="str", required=True),
         barkSound=dict(type="str", required=True),
     ),
+    NotificationType.BREVO: dict(
+        brevoApiKey=dict(type="str", required=True),
+        brevoFromEmail=dict(type="str", required=True),
+        brevoToEmail=dict(type="str", required=True),
+        brevoFromName=dict(type="str", required=False),
+        brevoCcEmail=dict(type="str", required=False),
+        brevoBccEmail=dict(type="str", required=False),
+        brevoSubject=dict(type="str", required=False),
+    ),
     NotificationType.CLICKSENDSMS: dict(
         clicksendsmsLogin=dict(type="str", required=True),
         clicksendsmsPassword=dict(type="str", required=True),
@@ -205,6 +223,14 @@ notification_provider_options = {
         discordUsername=dict(type="str", required=False),
         discordWebhookUrl=dict(type="str", required=True),
         discordPrefixMessage=dict(type="str", required=False),
+    ),
+    NotificationType.EVOLUTION_API: dict(
+        evolutionInstanceName=dict(type="str", required=True),
+        evolutionAuthToken=dict(type="str", required=True),
+        evolutionRecipient=dict(type="str", required=True),
+        evolutionApiUrl=dict(type="str", required=False),
+        evolutionUseCustomMessage=dict(type="bool", required=False),
+        evolutionCustomMessage=dict(type="str", required=False),
     ),
     NotificationType.FEISHU: dict(
         feishuWebHookUrl=dict(type="str", required=True),
@@ -270,6 +296,13 @@ notification_provider_options = {
         mattermostchannel=dict(type="str", required=False),
         mattermosticonemo=dict(type="str", required=False),
         mattermosticonurl=dict(type="str", required=False),
+    ),
+    NotificationType.NEXTCLOUD_TALK: dict(
+        host=dict(type="str", required=True),
+        conversationToken=dict(type="str", required=True),
+        botSecret=dict(type="str", required=True),
+        sendSilentUp=dict(type="bool", required=False),
+        sendSilentDown=dict(type="bool", required=False),
     ),
     NotificationType.NOSTR: dict(
         sender=dict(type="str", required=True),

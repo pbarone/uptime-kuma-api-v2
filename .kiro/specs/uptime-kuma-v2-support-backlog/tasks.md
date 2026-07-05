@@ -8,19 +8,19 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
 
 ## Tasks
 
-- [ ] 1. Add new MonitorType enum values
-  - [ ] 1.1 Add RABBITMQ, SNMP, SMTP, SYSTEM_SERVICE to `monitor_type.py`
+- [x] 1. Add new MonitorType enum values
+  - [x] 1.1 Add RABBITMQ, SNMP, SMTP, SYSTEM_SERVICE to `monitor_type.py`
     - Add `RABBITMQ = "rabbitmq"`, `SNMP = "snmp"`, `SMTP = "smtp"`, `SYSTEM_SERVICE = "system-service"` to the MonitorType enum
     - Add docstrings for each new member
     - _Requirements: 1.1_
 
-- [ ] 2. Implement new monitor parameters in `_build_monitor_data`
-  - [ ] 2.1 Add new parameter signatures and input validations
+- [x] 2. Implement new monitor parameters in `_build_monitor_data`
+  - [x] 2.1 Add new parameter signatures and input validations
     - Add all new parameters to `_build_monitor_data` signature: `jsonPathOperator`, `ipFamily`, HTTP params (`cacheBust`, `retryOnlyOnStatusCodeFailure`, `bearer_token`, `oauth_audience`, `domainExpiryNotification`, `saveResponse`, `saveErrorResponse`, `responseMaxLength`, `responsecheck`), PING params (`ping_count`, `ping_numeric`, `ping_per_request_timeout`), MQTT params (`mqttWebsocketPath`, `mqttCheckType`), low-priority params (`subtype`, `wsSubprotocol`, `wsIgnoreSecWebsocketAcceptHeader`, `remoteBrowsersToggle`, `remote_browser`, `screenshot_delay`, `gamedigToken`, `protocol`), RABBITMQ params (`rabbitmqNodes`, `rabbitmqUsername`, `rabbitmqPassword`), SNMP params (`snmpOid`, `snmpVersion`, `snmp_v3_username`), SMTP params (`smtpSecurity`), SYSTEM_SERVICE params (`system_service_name`)
     - Add validation checks at the top of method body: `responseMaxLength` range [1, 10_000_000], `mqttCheckType` must be in (None, "keyword", "json-query"), `mqttWebsocketPath` must not exceed 255 chars
     - _Requirements: 2.1, 3.1, 3.4, 4.1, 5.1, 5.3, 5.4, 6.1_
 
-  - [ ] 2.2 Implement type-conditional payload assembly for new monitor types
+  - [x] 2.2 Implement type-conditional payload assembly for new monitor types
     - Add RABBITMQ block: serialize `rabbitmqNodes` as JSON string, include `rabbitmqUsername`, `rabbitmqPassword`
     - Add SNMP block: include `snmpOid`, `snmpVersion`, `snmp_v3_username` (if non-None)
     - Add SMTP block: include `smtpSecurity`
@@ -31,7 +31,7 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - Add MQTT new params block (`mqttWebsocketPath`, `mqttCheckType`, if non-None)
     - _Requirements: 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 4.2, 4.3, 5.2_
 
-  - [ ] 2.3 Implement v2 version-gated parameter inclusion
+  - [x] 2.3 Implement v2 version-gated parameter inclusion
     - Add `if parse_version(self.version) >= parse_version("2.0"):` block at end of method
     - Inside v2 gate: include `ipFamily` for network-type monitors (if non-None)
     - Inside v2 gate: include HTTP params for HTTP-family types (if non-None)
@@ -39,45 +39,45 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - Ensure v2-only params are silently omitted for v1 connections
     - _Requirements: 2.4, 2.5, 2.6, 3.2, 3.3, 3.5, 6.2, 6.3, 13.2, 13.3, 13.4_
 
-  - [ ] 2.4 Update `_check_arguments_monitor` with new type required fields
+  - [x] 2.4 Update `_check_arguments_monitor` with new type required fields
     - Add to `required_args_by_type`: `MonitorType.RABBITMQ: ["rabbitmqNodes"]`, `MonitorType.SNMP: ["hostname", "snmpOid"]`, `MonitorType.SMTP: ["hostname"]`, `MonitorType.SYSTEM_SERVICE: ["system_service_name"]`
     - _Requirements: 1.6, 1.7, 1.8_
 
-  - [ ] 2.5 Remove dead code: clean up any orphaned references from the old `googleAnalyticsId`-only path in monitor/status page code
+  - [x] 2.5 Remove dead code: clean up any orphaned references from the old `googleAnalyticsId`-only path in monitor/status page code
     - Verify no stale imports or unreachable branches remain after changes
     - _Requirements: (cleanup)_
 
-- [ ] 3. Implement status page changes in `_build_status_page_data`
-  - [ ] 3.1 Add new status page parameters and version-gated logic
+- [x] 3. Implement status page changes in `_build_status_page_data`
+  - [x] 3.1 Add new status page parameters and version-gated logic
     - Add parameters to signature: `analyticsType`, `analyticsId`, `analyticsScriptUrl`, `password`, `showOnlyLastHeartbeat`, `rssTitle`
     - In body: when version >= 2.0, include v2 analytics fields (if non-None), omit `googleAnalyticsId`, omit `password`, include `showOnlyLastHeartbeat` (if non-None), include `rssTitle` (if non-None)
     - In body: when version < 2.0, include `googleAnalyticsId`, include `password` (if non-None), omit v2 fields
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4_
 
-  - [ ] 3.2 Update `save_status_page` to defensively pop v2-incompatible fields
+  - [x] 3.2 Update `save_status_page` to defensively pop v2-incompatible fields
     - Pop `googleAnalyticsId` from fetched status page data before passing to builder (v2 may not return it)
     - Ensure `showOnlyLastHeartbeat` and `rssTitle` pass through from fetched data
     - _Requirements: 7.6, 9.5_
 
-- [ ] 4. Checkpoint
+- [x] 4. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Add new notification providers
-  - [ ] 5.1 Add Nextcloud Talk, Brevo, Evolution API to `notification_providers.py`
+- [x] 5. Add new notification providers
+  - [x] 5.1 Add Nextcloud Talk, Brevo, Evolution API to `notification_providers.py`
     - Add enum members: `NEXTCLOUD_TALK = "nextcloudtalk"`, `BREVO = "Brevo"`, `EVOLUTION_API = "evolution"` with docstrings
     - Add `notification_provider_options` entries with required/optional fields per provider as specified in design
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-- [ ] 6. Implement logger parameter
-  - [ ] 6.1 Add `logger` parameter to `UptimeKumaApi.__init__`
+- [x] 6. Implement logger parameter
+  - [x] 6.1 Add `logger` parameter to `UptimeKumaApi.__init__`
     - Add `logger=None` to constructor signature
     - Add type validation: raise TypeError if not Logger, bool, or None
     - Build `sio_kwargs` dict, conditionally include `logger` key
     - Replace `socketio.Client(ssl_verify=ssl_verify)` with `socketio.Client(**sio_kwargs)`
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-- [ ] 7. Implement MonitorBuilder DTO
-  - [ ] 7.1 Create `monitor_builder.py` with MonitorBuilder class
+- [x] 7. Implement MonitorBuilder DTO
+  - [x] 7.1 Create `monitor_builder.py` with MonitorBuilder class
     - Create new file `uptime_kuma_api/monitor_builder.py`
     - Implement MonitorBuilder class with `__init__`, fluent setter methods for ALL `_build_monitor_data` parameters, and `build()` method
     - `build()` validates that `type` and `name` are set, raises ValueError if missing
@@ -85,14 +85,14 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - Last-set-wins semantics for duplicate setter calls
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7_
 
-  - [ ] 7.2 Export MonitorBuilder from `__init__.py`
+  - [x] 7.2 Export MonitorBuilder from `__init__.py`
     - Add `from .monitor_builder import MonitorBuilder` to `uptime_kuma_api/__init__.py`
     - _Requirements: 12.1_
 
-- [ ] 8. Checkpoint
+- [x] 8. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Write property-based tests (Hypothesis)
+- [x] 9. Write property-based tests (Hypothesis)
   - [ ]* 9.1 Write property test: new monitor type payload assembly
     - **Property 1: New monitor type payload assembly**
     - For any new monitor type (RABBITMQ, SNMP, SMTP, SYSTEM_SERVICE) with valid type-specific params, `_build_monitor_data` produces a dict containing those params unchanged
@@ -160,15 +160,15 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - For any subset of fields set (including type/name), build() returns dict with exactly those keys
     - **Validates: Requirements 12.3, 12.5**
 
-- [ ] 10. Write unit tests
-  - [ ]* 10.1 Write unit tests for new monitor types
+- [x] 10. Write unit tests
+  - [x] 10.1 Write unit tests for new monitor types
     - Test each new type with all required fields → verify dict output shape
     - Test each new type with a required field missing → verify TypeError
     - Test port defaults (SNMP → 161, SMTP → 25)
     - File: `tests/test_monitor.py` (extend existing)
     - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8_
 
-  - [ ]* 10.2 Write unit tests for new monitor parameters
+  - [x] 10.2 Write unit tests for new monitor parameters
     - Test jsonPathOperator inclusion for JSON_QUERY type
     - Test jsonPathOperator exclusion for non-JSON_QUERY types
     - Test ipFamily inclusion/exclusion based on type and version
@@ -178,7 +178,7 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - File: `tests/test_monitor.py` (extend existing)
     - _Requirements: 2.1-2.6, 3.1-3.5, 4.1-4.3, 5.1-5.4, 6.1-6.3_
 
-  - [ ]* 10.3 Write unit tests for status page changes
+  - [x] 10.3 Write unit tests for status page changes
     - Test v2 analytics fields included, googleAnalyticsId omitted on v2
     - Test v1 googleAnalyticsId included, v2 analytics omitted on v1
     - Test password omitted on v2, included on v1
@@ -187,13 +187,13 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - File: `tests/test_status_page.py` (extend existing)
     - _Requirements: 7.1-7.6, 8.1-8.5, 9.1-9.5_
 
-  - [ ]* 10.4 Write unit tests for notification providers
+  - [x] 10.4 Write unit tests for notification providers
     - Test each new provider with all required fields → verify no validation error
     - Test each new provider with a required field missing → verify error raised
     - File: `tests/test_notification.py` (extend existing)
     - _Requirements: 10.1-10.6_
 
-  - [ ]* 10.5 Write unit tests for logger parameter
+  - [x] 10.5 Write unit tests for logger parameter
     - Test Logger instance passes to socketio.Client
     - Test None omits logger from socketio kwargs
     - Test True (bool) accepted
@@ -201,7 +201,7 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - File: `tests/test_monitor.py` or `tests/test_api.py`
     - _Requirements: 11.1-11.4_
 
-  - [ ]* 10.6 Write unit tests for MonitorBuilder
+  - [x] 10.6 Write unit tests for MonitorBuilder
     - Test fluent chaining returns same instance
     - Test build() with type+name → correct dict
     - Test build() without type → ValueError
@@ -211,29 +211,29 @@ Attribution: Credit @markus-seidl (PR #86) in commit messages for cherry-picked 
     - File: `tests/test_monitor_builder.py` (new file)
     - _Requirements: 12.1-12.6_
 
-- [ ] 11. Checkpoint
+- [x] 11. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Update documentation
-  - [ ] 12.1 Update `docstrings.py` with new parameter documentation
+- [x] 12. Update documentation
+  - [x] 12.1 Update `docstrings.py` with new parameter documentation
     - Add docstrings for all new parameters in `_build_monitor_data`
     - Add docstrings for new status page parameters
     - Add docstrings for logger parameter
     - Document MonitorBuilder usage
     - _Requirements: (documentation)_
 
-  - [ ] 12.2 Update `CHANGELOG.md`
+  - [x] 12.2 Update `CHANGELOG.md`
     - Add entry under new version section for: new monitor types (RABBITMQ, SNMP, SMTP, SYSTEM_SERVICE), new monitor parameters, status page v2 analytics + password removal + new fields, new notification providers (Nextcloud Talk, Brevo, Evolution API), logger parameter, MonitorBuilder DTO, version detection improvements
     - Credit @markus-seidl (PR #86) in changelog
     - _Requirements: 14.1, 14.2, 14.3_
 
-  - [ ] 12.3 Update `README.md`
+  - [x] 12.3 Update `README.md`
     - Add MonitorBuilder usage example to README
     - Mention v2 support improvements
     - List new monitor types supported
     - _Requirements: (documentation)_
 
-- [ ] 13. Final checkpoint
+- [x] 13. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 14. Live environment integration test

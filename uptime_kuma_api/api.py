@@ -283,6 +283,10 @@ def _check_arguments_monitor(kwargs) -> None:
         MonitorType.REAL_BROWSER: ["url"],
         MonitorType.KAFKA_PRODUCER: ["kafkaProducerTopic", "kafkaProducerMessage"],
         MonitorType.TAILSCALE_PING: ["hostname"],
+        MonitorType.RABBITMQ: ["rabbitmqNodes"],
+        MonitorType.SNMP: ["hostname", "snmpOid"],
+        MonitorType.SMTP: ["hostname"],
+        MonitorType.SYSTEM_SERVICE: ["system_service_name"],
     }
     type_ = kwargs["type"]
     required_args = required_args_by_type[type_]
@@ -463,13 +467,23 @@ class UptimeKumaApi(object):
             timeout: float = 10,
             headers: dict = None,
             ssl_verify: bool = True,
-            wait_events: float = 0.2
+            wait_events: float = 0.2,
+            logger=None,
     ) -> None:
+        import logging
+
+        if logger is not None and not isinstance(logger, (logging.Logger, bool)):
+            raise TypeError("logger must be a logging.Logger instance, a bool, or None")
+
         self.url = url.rstrip("/")
         self.timeout = timeout
         self.headers = headers
         self.wait_events = wait_events
-        self.sio = socketio.Client(ssl_verify=ssl_verify)
+
+        sio_kwargs = {"ssl_verify": ssl_verify}
+        if logger is not None:
+            sio_kwargs["logger"] = logger
+        self.sio = socketio.Client(**sio_kwargs)
 
         self._event_data: dict = {
             Event.MONITOR_LIST: None,
@@ -791,6 +805,58 @@ class UptimeKumaApi(object):
             kafkaProducerSsl: bool = False,
             kafkaProducerAllowAutoTopicCreation: bool = False,
             kafkaProducerSaslOptions: dict = None,
+
+            # JSON_QUERY (alongside jsonPath, expectedValue)
+            jsonPathOperator: str = None,
+
+            # Network monitors
+            ipFamily: str = None,
+
+            # HTTP, KEYWORD, JSON_QUERY, REAL_BROWSER
+            cacheBust: bool = None,
+            retryOnlyOnStatusCodeFailure: bool = None,
+            bearer_token: str = None,
+            oauth_audience: str = None,
+            domainExpiryNotification: bool = None,
+            saveResponse: bool = None,
+            saveErrorResponse: bool = None,
+            responseMaxLength: int = None,
+            responsecheck: str = None,
+
+            # PING
+            ping_count: int = None,
+            ping_numeric: bool = None,
+            ping_per_request_timeout: int = None,
+
+            # MQTT
+            mqttWebsocketPath: str = None,
+            mqttCheckType: str = None,
+
+            # Low-priority / misc
+            subtype: str = None,
+            wsSubprotocol: str = None,
+            wsIgnoreSecWebsocketAcceptHeader: bool = None,
+            remoteBrowsersToggle: bool = None,
+            remote_browser: str = None,
+            screenshot_delay: int = None,
+            gamedigToken: str = None,
+            protocol: str = None,
+
+            # RABBITMQ
+            rabbitmqNodes: list = None,
+            rabbitmqUsername: str = "",
+            rabbitmqPassword: str = "",
+
+            # SNMP
+            snmpOid: str = None,
+            snmpVersion: str = None,
+            snmp_v3_username: str = None,
+
+            # SMTP (monitor type)
+            smtpSecurity: str = "starttls",
+
+            # SYSTEM_SERVICE
+            system_service_name: str = None,
     ) -> dict:
         if accepted_statuscodes is None:
             accepted_statuscodes = ["200-299"]
@@ -800,6 +866,15 @@ class UptimeKumaApi(object):
 
         if conditions is not None and not isinstance(conditions, list):
             raise TypeError("conditions must be a list or None")
+
+        if responseMaxLength is not None and (responseMaxLength < 1 or responseMaxLength > 10_000_000):
+            raise ValueError("responseMaxLength must be between 1 and 10,000,000")
+
+        if mqttCheckType is not None and mqttCheckType not in ("keyword", "json-query"):
+            raise ValueError(f"mqttCheckType must be 'keyword' or 'json-query', got: {mqttCheckType}")
+
+        if mqttWebsocketPath is not None and len(mqttWebsocketPath) > 255:
+            raise ValueError("mqttWebsocketPath must not exceed 255 characters")
 
         data = {
             "type": type,
@@ -911,6 +986,10 @@ class UptimeKumaApi(object):
                 port = 53
             elif type == MonitorType.RADIUS:
                 port = 1812
+            elif type == MonitorType.SNMP:
+                port = 161
+            elif type == MonitorType.SMTP:
+                port = 25
         data.update({
             "port": port,
         })
@@ -973,6 +1052,8 @@ class UptimeKumaApi(object):
                 "jsonPath": jsonPath,
                 "expectedValue": expectedValue,
             })
+            if jsonPathOperator is not None:
+                data["jsonPathOperator"] = jsonPathOperator
 
         # KAFKA_PRODUCER
         if type == MonitorType.KAFKA_PRODUCER:
@@ -990,6 +1071,97 @@ class UptimeKumaApi(object):
                 "kafkaProducerAllowAutoTopicCreation": kafkaProducerAllowAutoTopicCreation,
                 "kafkaProducerSaslOptions": kafkaProducerSaslOptions,
             })
+
+        # RABBITMQ
+        if type == MonitorType.RABBITMQ:
+            import json as _json
+            data.update({
+                "rabbitmqNodes": _json.dumps(rabbitmqNodes) if rabbitmqNodes else "[]",
+                "rabbitmqUsername": rabbitmqUsername,
+                "rabbitmqPassword": rabbitmqPassword,
+            })
+
+        # SNMP
+        if type == MonitorType.SNMP:
+            data.update({
+                "snmpOid": snmpOid,
+                "snmpVersion": snmpVersion,
+            })
+            if snmp_v3_username is not None:
+                data["snmp_v3_username"] = snmp_v3_username
+
+        # SMTP (monitor type)
+        if type == MonitorType.SMTP:
+            data.update({
+                "smtpSecurity": smtpSecurity,
+            })
+
+        # SYSTEM_SERVICE
+        if type == MonitorType.SYSTEM_SERVICE:
+            data.update({
+                "system_service_name": system_service_name,
+            })
+
+        # PING-specific params
+        if type == MonitorType.PING:
+            if ping_count is not None:
+                data["ping_count"] = ping_count
+            if ping_numeric is not None:
+                data["ping_numeric"] = ping_numeric
+            if ping_per_request_timeout is not None:
+                data["ping_per_request_timeout"] = ping_per_request_timeout
+
+        # MQTT new params
+        if type == MonitorType.MQTT:
+            if mqttWebsocketPath is not None:
+                data["mqttWebsocketPath"] = mqttWebsocketPath
+            if mqttCheckType is not None:
+                data["mqttCheckType"] = mqttCheckType
+
+        # v2-only parameters (gated behind version check)
+        if parse_version(self.version) >= parse_version("2.0"):
+            # Network monitors: ipFamily
+            network_types = [
+                MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
+                MonitorType.PING, MonitorType.PORT, MonitorType.DNS,
+                MonitorType.STEAM, MonitorType.MQTT, MonitorType.RADIUS,
+                MonitorType.TAILSCALE_PING, MonitorType.GRPC_KEYWORD,
+                MonitorType.SNMP, MonitorType.SMTP, MonitorType.RABBITMQ,
+            ]
+            if type in network_types and ipFamily is not None:
+                data["ipFamily"] = ipFamily
+
+            # HTTP params (v2-only)
+            http_types = [MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY, MonitorType.REAL_BROWSER]
+            if type in http_types:
+                for field, value in [
+                    ("cacheBust", cacheBust),
+                    ("retryOnlyOnStatusCodeFailure", retryOnlyOnStatusCodeFailure),
+                    ("bearer_token", bearer_token),
+                    ("oauth_audience", oauth_audience),
+                    ("domainExpiryNotification", domainExpiryNotification),
+                    ("saveResponse", saveResponse),
+                    ("saveErrorResponse", saveErrorResponse),
+                    ("responseMaxLength", responseMaxLength),
+                    ("responsecheck", responsecheck),
+                ]:
+                    if value is not None:
+                        data[field] = value
+
+            # Low-priority params (v2-only, not type-gated)
+            for field, value in [
+                ("subtype", subtype),
+                ("wsSubprotocol", wsSubprotocol),
+                ("wsIgnoreSecWebsocketAcceptHeader", wsIgnoreSecWebsocketAcceptHeader),
+                ("remoteBrowsersToggle", remoteBrowsersToggle),
+                ("remote_browser", remote_browser),
+                ("screenshot_delay", screenshot_delay),
+                ("gamedigToken", gamedigToken),
+                ("protocol", protocol),
+            ]:
+                if value is not None:
+                    data[field] = value
+
         return data
 
     def _build_maintenance_data(
@@ -1060,7 +1232,17 @@ class UptimeKumaApi(object):
             showCertificateExpiry: bool = False,
 
             icon: str = "/icon.svg",
-            publicGroupList: list = None
+            publicGroupList: list = None,
+
+            # v2 analytics
+            analyticsType: str = None,
+            analyticsId: str = None,
+            analyticsScriptUrl: str = None,
+            # v2 password removal
+            password: str = None,
+            # v2 new fields
+            showOnlyLastHeartbeat: bool = None,
+            rssTitle: str = None,
     ) -> tuple[str, dict, str, list]:
         if not theme:
             if parse_version(self.version) >= parse_version("1.22"):
@@ -1083,7 +1265,6 @@ class UptimeKumaApi(object):
             "published": published,
             "showTags": showTags,
             "domainNameList": domainNameList,
-            "googleAnalyticsId": googleAnalyticsId,
             "customCSS": customCSS,
             "footerText": footerText,
             "showPoweredBy": showPoweredBy,
@@ -1092,6 +1273,27 @@ class UptimeKumaApi(object):
             config.update({
                 "showCertificateExpiry": showCertificateExpiry,
             })
+
+        if parse_version(self.version) >= parse_version("2.0"):
+            # v2: use new analytics fields, omit googleAnalyticsId
+            if analyticsType is not None:
+                config["analyticsType"] = analyticsType
+            if analyticsId is not None:
+                config["analyticsId"] = analyticsId
+            if analyticsScriptUrl is not None:
+                config["analyticsScriptUrl"] = analyticsScriptUrl
+            # v2: omit password entirely (silently ignored)
+            # v2: new fields
+            if showOnlyLastHeartbeat is not None:
+                config["showOnlyLastHeartbeat"] = showOnlyLastHeartbeat
+            if rssTitle is not None:
+                config["rssTitle"] = rssTitle
+        else:
+            # v1: include googleAnalyticsId and password
+            config["googleAnalyticsId"] = googleAnalyticsId
+            if password is not None:
+                config["password"] = password
+
         return slug, config, icon, publicGroupList
 
     # monitor
@@ -2138,6 +2340,7 @@ class UptimeKumaApi(object):
         status_page.pop("incident")
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
+        status_page.pop("googleAnalyticsId", None)  # v2 may still return this legacy field
         status_page.update(kwargs)
         data = self._build_status_page_data(**status_page)
         r = self._call('saveStatusPage', data)

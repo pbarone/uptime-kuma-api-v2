@@ -5,3 +5,6 @@ __pycache__
 *.egg-info
 dist
 docs/_build
+.env
+tests/.env
+tests/.live_test_ids.json

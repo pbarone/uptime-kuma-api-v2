@@ -69,3 +69,15 @@ class MonitorType(str, Enum):
 
     TAILSCALE_PING = "tailscale-ping"
     """Tailscale Ping"""
+
+    RABBITMQ = "rabbitmq"
+    """RabbitMQ"""
+
+    SNMP = "snmp"
+    """SNMP"""
+
+    SMTP = "smtp"
+    """SMTP"""
+
+    SYSTEM_SERVICE = "system-service"
+    """System Service"""

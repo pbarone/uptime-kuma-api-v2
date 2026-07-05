@@ -19,14 +19,14 @@ with open("README.md", "r", "utf-8") as f:
     readme = f.read()
 
 setup(
-    name=info["__title__"],
+    name="uptime-kuma-api-v2",
     version=info["__version__"],
-    description="A python wrapper for the Uptime Kuma WebSocket API",
+    description="A python wrapper for the Uptime Kuma WebSocket API (v2 support)",
     long_description=readme,
     long_description_content_type="text/markdown",
-    url="https://github.com/lucasheld/uptime-kuma-api",
+    url="https://github.com/pbarone/uptime-kuma-api-v2",
     author=info["__author__"],
-    author_email="lucasheld@hotmail.de",
+    author_email="pbarone@users.noreply.github.com",
     license=info["__license__"],
     packages=["uptime_kuma_api"],
     python_requires=">=3.7, <4",

@@ -1,5 +1,26 @@
 ## Changelog
 
+### Release 2.1.0
+
+#### Features
+- add new monitor types: RabbitMQ, SNMP, SMTP, System Service
+- add v2 monitor parameters: `jsonPathOperator`, `ipFamily`, `cacheBust`, `retryOnlyOnStatusCodeFailure`, `bearer_token`, `oauth_audience`, `domainExpiryNotification`, `saveResponse`, `saveErrorResponse`, `responseMaxLength`, `responsecheck`, `ping_count`, `ping_numeric`, `ping_per_request_timeout`, `mqttWebsocketPath`, `mqttCheckType`, `subtype`, `wsSubprotocol`, `wsIgnoreSecWebsocketAcceptHeader`, `remoteBrowsersToggle`, `remote_browser`, `screenshot_delay`, `gamedigToken`, `protocol`
+- add v2 status page fields: `analyticsType`, `analyticsId`, `analyticsScriptUrl`, `showOnlyLastHeartbeat`, `rssTitle`
+- add version-gated status page: remove `googleAnalyticsId` and `password` for v2, keep for v1
+- add new notification providers: Nextcloud Talk, Brevo, Evolution API
+- add `logger` parameter to `UptimeKumaApi` constructor (credit: @markus-seidl, PR #86)
+- add `MonitorBuilder` fluent builder class for monitor configuration (credit: @markus-seidl, PR #86)
+- add automatic v2-only parameter gating via `parse_version`
+
+#### Tests
+- add 86 unit tests covering all new features (no live server required):
+  - `test_monitor_types_v2.py`: new monitor type payload assembly and required-field validation
+  - `test_monitor_params_v2.py`: v2 parameter inclusion, version gating, input validation
+  - `test_status_page_v2.py`: analytics replacement, password removal, new field routing
+  - `test_notification_v2.py`: Nextcloud Talk, Brevo, Evolution API provider validation
+  - `test_logger.py`: logger parameter type checking and socketio forwarding
+  - `test_monitor_builder.py`: fluent builder chaining, build output, error handling
+
 ### Release 2.0.0
 
 #### Features

@@ -106,6 +106,38 @@ def monitor_docstring(mode) -> str:
             - **accessKeyId** (*str*, *optional*): AccessKey Id, defaults to None
             - **secretAccessKey** (*str*, *optional*): Secret AccessKey, defaults to None
             - **sessionToken** (*str*, *optional*): Session Token, defaults to None
+        :param str, optional jsonPathOperator: JSON Path comparison operator (v2). Applicable to JSON_QUERY monitors. Defaults to None.
+        :param str, optional ipFamily: IP Family. Force IPv4 or IPv6 for network monitors (v2). Defaults to None.
+        :param bool, optional cacheBust: Cache Bust. Add a cache-busting query parameter to HTTP requests (v2). Defaults to None.
+        :param bool, optional retryOnlyOnStatusCodeFailure: Retry only on status code failure (v2). Defaults to None.
+        :param str, optional bearer_token: Bearer Token for HTTP authentication (v2). Defaults to None.
+        :param str, optional oauth_audience: OAuth Audience parameter (v2). Defaults to None.
+        :param bool, optional domainExpiryNotification: Domain Expiry Notification separate from certificate expiry (v2). Defaults to None.
+        :param bool, optional saveResponse: Save full response body (v2). Defaults to None.
+        :param bool, optional saveErrorResponse: Save error response body (v2). Defaults to None.
+        :param int, optional responseMaxLength: Maximum response body length to save, range 1-10000000 (v2). Defaults to None.
+        :param str, optional responsecheck: Response body check string (v2). Defaults to None.
+        :param int, optional ping_count: Number of pings per check for PING monitors (v2). Defaults to None.
+        :param bool, optional ping_numeric: Numeric output mode for PING monitors (v2). Defaults to None.
+        :param int, optional ping_per_request_timeout: Per-request timeout for PING monitors (v2). Defaults to None.
+        :param str, optional mqttWebsocketPath: MQTT Websocket transport path (v2). Defaults to None.
+        :param str, optional mqttCheckType: MQTT check mode, "keyword" or "json-query" (v2). Defaults to None.
+        :param str, optional subtype: Monitor subtype for SSH/Websocket (v2). Defaults to None.
+        :param str, optional wsSubprotocol: Websocket subprotocol (v2). Defaults to None.
+        :param bool, optional wsIgnoreSecWebsocketAcceptHeader: Ignore Sec-WebSocket-Accept header (v2). Defaults to None.
+        :param bool, optional remoteBrowsersToggle: Enable remote browser for Real Browser monitors (v2). Defaults to None.
+        :param str, optional remote_browser: Remote browser ID (v2). Defaults to None.
+        :param int, optional screenshot_delay: Delay before screenshot in ms for Real Browser monitors (v2). Defaults to None.
+        :param str, optional gamedigToken: Gamedig auth token (v2). Defaults to None.
+        :param str, optional protocol: Protocol selection (v2). Defaults to None.
+        :param list, optional rabbitmqNodes: RabbitMQ node list (v2). Required for RABBITMQ monitors.
+        :param str, optional rabbitmqUsername: RabbitMQ username (v2). Defaults to "".
+        :param str, optional rabbitmqPassword: RabbitMQ password (v2). Defaults to "".
+        :param str, optional snmpOid: SNMP OID to monitor (v2). Required for SNMP monitors.
+        :param str, optional snmpVersion: SNMP version, "1", "2c", or "3" (v2). Defaults to None.
+        :param str, optional snmp_v3_username: SNMPv3 username (v2). Defaults to None.
+        :param str, optional smtpSecurity: SMTP security mode, "secure", "starttls", or "nostarttls" (v2). Defaults to "starttls".
+        :param str, optional system_service_name: System service name (v2). Required for SYSTEM_SERVICE monitors.
     """
 
 
@@ -339,6 +371,24 @@ def notification_docstring(mode) -> str:
         :param str, optional webhookURL: Notification option for ``type`` :attr:`~.NotificationType.WEBHOOK`.
         :param str, optional weComBotKey: Notification option for ``type`` :attr:`~.NotificationType.WECOM`.
         :param str, optional webhookUrl: Notification option for ``type`` :attr:`~.NotificationType.ZOHOCLIQ`.
+        :param str, optional host: Notification option for ``type`` :attr:`~.NotificationType.NEXTCLOUD_TALK`. Server host URL.
+        :param str, optional conversationToken: Notification option for ``type`` :attr:`~.NotificationType.NEXTCLOUD_TALK`. Conversation token.
+        :param str, optional botSecret: Notification option for ``type`` :attr:`~.NotificationType.NEXTCLOUD_TALK`. Bot secret.
+        :param bool sendSilentUp: Notification option for ``type`` :attr:`~.NotificationType.NEXTCLOUD_TALK`. Send silently on up.
+        :param bool sendSilentDown: Notification option for ``type`` :attr:`~.NotificationType.NEXTCLOUD_TALK`. Send silently on down.
+        :param str, optional brevoApiKey: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. API Key.
+        :param str, optional brevoFromEmail: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. From email address.
+        :param str, optional brevoToEmail: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. To email address.
+        :param str brevoFromName: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. From name.
+        :param str brevoCcEmail: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. CC email.
+        :param str brevoBccEmail: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. BCC email.
+        :param str brevoSubject: Notification option for ``type`` :attr:`~.NotificationType.BREVO`. Subject line.
+        :param str, optional evolutionInstanceName: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Instance name.
+        :param str, optional evolutionAuthToken: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Auth token.
+        :param str, optional evolutionRecipient: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Recipient.
+        :param str evolutionApiUrl: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. API URL.
+        :param bool evolutionUseCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Use custom message.
+        :param str evolutionCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Custom message content.
     """
 
 

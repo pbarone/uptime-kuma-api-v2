@@ -9,4 +9,5 @@ from .docker_type import DockerType
 from .maintenance_strategy import MaintenanceStrategy
 from .exceptions import UptimeKumaException, Timeout
 from .event import Event
+from .monitor_builder import MonitorBuilder
 from .api import UptimeKumaApi
