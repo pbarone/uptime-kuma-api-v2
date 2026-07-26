@@ -6,22 +6,63 @@ on:
       - "v*"
 
 jobs:
+  # Gate: a PyPI upload cannot be undone and the version number is burned
+  # permanently, so tests and a tag/version match are verified before building.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.8", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run unit tests
+        run: |
+          pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
+                 tests/test_status_page_v2.py tests/test_notification_v2.py \
+                 tests/test_logger.py tests/test_monitor_builder.py -v
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+
+      - name: Verify tag matches __version__
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(python -c "info={}; exec(open('uptime_kuma_api/__version__.py').read(), info); print(info['__version__'])")
+          echo "tag=$tag package=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match __version__ $pkg"
+            exit 1
+          fi
 
       - name: Install build tools
         run: pip install build twine
 
       - name: Build package
         run: python -m build
+
+      - name: Check distribution metadata
+        run: twine check dist/*
 
       - name: Upload to PyPI
         env:

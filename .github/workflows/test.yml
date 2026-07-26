@@ -1,23 +1,71 @@
 name: Tests
 
+# Branch pushes get a fast single-version run so feedback does not wait for a PR.
+# main, PRs and release tags get the full matrix.
 on:
   push:
-    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# A newer push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The v2 unit tests run without a live Uptime Kuma server. The remaining test
+  # files are integration tests that require an instance at 127.0.0.1:3001 and
+  # delete all of its data, so they are never run in CI.
+  V2_TESTS: >-
+    tests/test_monitor_types_v2.py
+    tests/test_monitor_params_v2.py
+    tests/test_status_page_v2.py
+    tests/test_notification_v2.py
+    tests/test_logger.py
+    tests/test_monitor_builder.py
 
 jobs:
-  test:
+  quick:
+    name: quick (3.11)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       github.ref != 'refs/heads/main' &&
+       !startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run unit tests
+        run: pytest ${{ env.V2_TESTS }} -v
+
+  full:
+    name: full
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -27,5 +75,4 @@ jobs:
           pip install pytest
 
       - name: Run unit tests
-        run: |
-          pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py tests/test_status_page_v2.py tests/test_notification_v2.py tests/test_logger.py tests/test_monitor_builder.py -v
+        run: pytest ${{ env.V2_TESTS }} -v
