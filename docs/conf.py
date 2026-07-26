@@ -12,8 +12,8 @@ import uptime_kuma_api
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'uptime-kuma-api-v2'
-copyright = '2025, Paolo Barone'
+project = 'uptime-kuma-api2'
+copyright = '2025-2026, Paolo Barone'
 author = 'Paolo Barone'
 
 version = uptime_kuma_api.__version__
@@ -39,7 +39,6 @@ add_module_names = False
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'alabaster'
-html_static_path = ['_static']
 
 html_theme_options = {
     "show_powered_by": False,
