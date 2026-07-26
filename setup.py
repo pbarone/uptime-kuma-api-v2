@@ -25,11 +25,16 @@ setup(
     long_description=readme,
     long_description_content_type="text/markdown",
     url="https://github.com/pbarone/uptime-kuma-api-v2",
+    project_urls={
+        "Source": "https://github.com/pbarone/uptime-kuma-api-v2",
+        "Changelog": "https://github.com/pbarone/uptime-kuma-api-v2/blob/main/CHANGELOG.md",
+        "Issues": "https://github.com/pbarone/uptime-kuma-api-v2/issues",
+    },
     author=info["__author__"],
     author_email="pbarone@users.noreply.github.com",
     license=info["__license__"],
     packages=["uptime_kuma_api"],
-    python_requires=">=3.7, <4",
+    python_requires=">=3.8, <4",
     install_requires=[
         "python-socketio[client]>=5.0.0",
         "packaging"
@@ -43,11 +48,12 @@ setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3 :: Only",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Software Development :: Libraries"

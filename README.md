@@ -1,23 +1,27 @@
-# uptime-kuma-api-v2
+# uptime-kuma-api2
 
 A wrapper for the Uptime Kuma Socket.IO API — with full v2 support
 ---
 
 > **Fork notice:** This is an actively maintained fork of [lucasheld/uptime-kuma-api](https://github.com/lucasheld/uptime-kuma-api), which appears to be unmaintained (last release: 2023, open PRs unanswered). This fork adds full Uptime Kuma v2.x support while maintaining backward compatibility with v1.x. Original work by [Lucas Held](https://github.com/lucasheld) — thank you for building the foundation.
 
-uptime-kuma-api-v2 is a Python wrapper for the [Uptime Kuma](https://github.com/louislam/uptime-kuma) Socket.IO API.
+> **Naming:** the PyPI distribution is `uptime-kuma-api2`, while the import package remains `uptime_kuma_api` so existing code works unchanged. The unrelated PyPI projects `uptime-kuma-api` (upstream) and `uptime-kuma-api-v2` (different maintainer) are not this fork.
+
+uptime-kuma-api2 is a Python wrapper for the [Uptime Kuma](https://github.com/louislam/uptime-kuma) Socket.IO API.
 
 This package was originally developed to configure Uptime Kuma with Ansible. The original Ansible collection can be found at https://github.com/lucasheld/ansible-uptime-kuma.
 
-Python version 3.7+ is required.
+Python version 3.8+ is required. Tested on 3.8 through 3.13.
 
 Supported Uptime Kuma versions:
 
-| Uptime Kuma     | uptime-kuma-api |
-|-----------------|-----------------|
-| 2.0.0 - 2.4.0   | 2.0.0 - 2.1.0   |
-| 1.21.3 - 1.23.2 | 1.0.0 - 1.2.1   |
-| 1.17.0 - 1.21.2 | 0.1.0 - 0.13.0  |
+| Uptime Kuma     | uptime-kuma-api2 |
+|-----------------|------------------|
+| 2.0.0 - 2.4.0   | 2.0.0 - 2.1.0    |
+| 1.21.3 - 1.23.2 | 1.0.0 - 1.2.1    |
+| 1.17.0 - 1.21.2 | 0.1.0 - 0.13.0   |
+
+Releases 1.2.1 and earlier were published under the upstream `uptime-kuma-api` name; 2.0.0 onward are published as `uptime-kuma-api2`.
 
 Installation
 ---
@@ -31,7 +35,14 @@ pip install uptime-kuma-api2
 
 Documentation
 ---
-The API Reference is available on [Read the Docs](https://uptime-kuma-api.readthedocs.io).
+API documentation lives in the [`docs/`](docs/) directory of this repository and can be built locally with Sphinx:
+
+```
+pip install -r dev-requirements.txt
+cd docs && make html
+```
+
+Note: [uptime-kuma-api.readthedocs.io](https://uptime-kuma-api.readthedocs.io) is the upstream project's site and does not document this fork's v2 features.
 
 Example
 ---
@@ -108,12 +119,14 @@ New in v2.1.0
 
 Testing
 ---
-Unit tests cover all v2 features and can be run without a live server:
+The v2 unit tests need no live server. These are the tests CI runs:
 
 ```
 pip install pytest
-pytest tests/ -v
+pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py tests/test_status_page_v2.py tests/test_notification_v2.py tests/test_logger.py tests/test_monitor_builder.py -v
 ```
+
+The remaining test files are integration tests inherited from upstream. They expect a live Uptime Kuma instance at `http://127.0.0.1:3001` and will **delete all monitors, notifications, proxies, tags, status pages, docker hosts, maintenances and API keys** on that instance, so never point them at a production server.
 
 Test files:
 

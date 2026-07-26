@@ -1,5 +1,29 @@
 ## Changelog
 
+### Release 2.2.0
+
+No functional changes to the library. Packaging, documentation, and supported Python versions only.
+
+#### BREAKING CHANGES
+- Python 3.8+ required. Support for Python 3.7 is dropped; it has been end-of-life since June 2023 and was never covered by CI. Installs on 3.7 will resolve to 2.1.0 or earlier.
+
+#### Documentation
+- align README, Sphinx docs and install instructions with the published distribution name `uptime-kuma-api2` (the import package remains `uptime_kuma_api`)
+- clarify that PyPI `uptime-kuma-api` (upstream) and `uptime-kuma-api-v2` (unrelated maintainer) are not this fork
+- correct the documented test command: only the six v2 test files run without a live server, and warn that the inherited integration tests wipe all data on the target instance
+- replace the Read the Docs link that pointed at the upstream project with local Sphinx build instructions
+
+#### Packaging
+- add `project_urls` (Source, Changelog, Issues) for the PyPI sidebar
+- add Python 3.12 and 3.13 classifiers to match the versions CI tests
+- add a valid `build` section to `.readthedocs.yaml` so Read the Docs builds can succeed
+- bump Sphinx to 7.4.7; the previous 5.3.0 pin fails on Python 3.12+ because `imghdr` was removed
+- ignore the `build/` directory
+
+#### Bugfixes
+- fix `SyntaxWarning: invalid escape sequence '\*'` raised on import under Python 3.12+ (`set_settings` docstring)
+- fix Sphinx warnings: malformed literal block in the `UptimeKumaApi` docstring, missing `_static` path, and `install` missing from the toctree
+
 ### Release 2.1.0
 
 #### Features

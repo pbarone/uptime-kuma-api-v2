@@ -3,6 +3,7 @@ venv
 .envrc
 __pycache__
 *.egg-info
+build
 dist
 docs/_build
 .env
