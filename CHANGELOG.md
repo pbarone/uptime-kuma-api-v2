@@ -1,8 +1,11 @@
 ## Changelog
 
-### Release 2.1.1
+### Release 2.2.0
 
-Packaging and documentation only. No functional changes to the library.
+No functional changes to the library. Packaging, documentation, and supported Python versions only.
+
+#### BREAKING CHANGES
+- Python 3.8+ required. Support for Python 3.7 is dropped; it has been end-of-life since June 2023 and was never covered by CI. Installs on 3.7 will resolve to 2.1.0 or earlier.
 
 #### Documentation
 - align README, Sphinx docs and install instructions with the published distribution name `uptime-kuma-api2` (the import package remains `uptime_kuma_api`)
