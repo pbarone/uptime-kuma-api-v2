@@ -9,3 +9,5 @@ docs/_build
 .env
 tests/.env
 tests/.live_test_ids.json
+# Config snapshots from live_test_backup.py — contain plaintext secrets
+tests/.backups/
