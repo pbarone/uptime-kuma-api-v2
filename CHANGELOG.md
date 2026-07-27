@@ -1,5 +1,18 @@
 ## Changelog
 
+### Release 2.2.1
+
+Three status page bugs on Uptime Kuma 2.x, all found by testing against a live 2.4.0 instance and all verified fixed there.
+
+#### Bugfixes
+- `get_status_page` no longer drops incidents on Uptime Kuma 2.1.0+. The server renamed the singular, nullable `incident` object to a plural `incidents` array ([louislam/uptime-kuma#6469](https://github.com/louislam/uptime-kuma/pull/6469)). Release 2.0.0 stopped the resulting `KeyError` by switching to `.get()`, but the library still only read the singular key, so on 2.1.0+ it returned `incident: None` and silently discarded the incidents entirely. Both keys are now always returned regardless of server version: `incidents` holds the full list, `incident` holds the first entry for backward compatibility. Reported upstream in [lucasheld/uptime-kuma-api#85](https://github.com/lucasheld/uptime-kuma-api/issues/85).
+- `save_status_page` no longer fails with `UptimeKumaException: Invalid analytics type` on any v2 status page that has no analytics configured. The v2 server requires `analyticsType` to be *present* in the payload and rejects the entire save when the key is absent; verified against 2.4.0 that `null` is accepted while an absent key, `""` and `"none"` are all rejected. The analytics fields are now sent unconditionally on v2, including when `None`. This also fixes `post_incident` and `unpin_incident`, which both call `save_status_page`.
+- `add_status_page` now refreshes the cached status page list. Uptime Kuma sends no list event when a page is added, and `wait_for_event` only blocks while the cached value is `None`, so an already-populated cache was satisfied instantly and never learned about the new page. `get_status_pages` and `delete_status_page` could not see a page created in the same session, making `delete_status_page` raise `status page does not exist` for a page that demonstrably existed.
+
+#### Tests
+- add `tests/test_status_page_incidents.py`: 10 regression tests covering both incident shapes, null and empty arrays, multiple incidents, absence of both keys, and style parsing. Confirmed to fail against the pre-fix code.
+- extend `tests/test_status_page_v2.py` with 3 tests asserting the v2 analytics keys are present when `None` and still absent on v1
+
 ### Release 2.2.0
 
 No functional changes to the library. Packaging, documentation, and supported Python versions only.
