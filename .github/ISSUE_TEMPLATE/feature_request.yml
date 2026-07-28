@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a new capability or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Note: this library aims to wrap the Uptime Kuma Socket.IO API, not to
+        add capabilities the server itself doesn't expose. New public API is a
+        long-term maintenance commitment, so requests are weighed accordingly.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do that the library doesn't support today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What API or behavior would you like? A sketch is fine.
+    validations:
+      required: false
+
+  - type: input
+    id: kuma_support
+    attributes:
+      label: Does the Uptime Kuma server support this?
+      description: Link the relevant Uptime Kuma feature/docs if known.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

@@ -1,0 +1,68 @@
+name: Bug report
+description: Report something that is broken or behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The version fields below are required — most
+        bugs in this library are version-specific, and reports without them
+        usually can't be diagnosed.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What went wrong, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal code snippet is ideal. Redact tokens/passwords.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Full traceback / error output
+      description: Paste the complete error, not just the last line.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: kuma_version
+    attributes:
+      label: Uptime Kuma server version
+      placeholder: e.g. 2.4.0 or 1.23.2
+    validations:
+      required: true
+
+  - type: input
+    id: lib_version
+    attributes:
+      label: uptime-kuma-api2 version
+      placeholder: e.g. 2.2.1  (pip show uptime-kuma-api2)
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: e.g. 3.12.4
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Deployment details (reverse proxy, self-signed TLS, Docker), etc.
+    validations:
+      required: false
