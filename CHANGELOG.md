@@ -13,6 +13,15 @@ Three status page bugs on Uptime Kuma 2.x, all found by testing against a live 2
 - add `tests/test_status_page_incidents.py`: 10 regression tests covering both incident shapes, null and empty arrays, multiple incidents, absence of both keys, and style parsing. Confirmed to fail against the pre-fix code.
 - extend `tests/test_status_page_v2.py` with 3 tests asserting the v2 analytics keys are present when `None` and still absent on v1
 
+#### Documentation
+- API reference is now published on [Read the Docs](https://uptime-kuma-api2.readthedocs.io)
+- add `MonitorBuilder` to the API reference (it was exported and documented in the README but missing from the generated docs)
+- rewrite the project intro to describe an independent continuation of the original library, with credit and the retained MIT copyright, rather than a "fork"
+- fix the `add_monitor` example return value (`monitorId` -> `monitorID`) and refresh the supported-version table
+
+#### Packaging
+- the GitHub repository was detached from the fork network and renamed from `uptime-kuma-api-v2` to `uptime-kuma-api2` to match the PyPI distribution; `project_urls` and the docs `github_repo` were updated accordingly (the old repository URL redirects)
+
 ### Release 2.2.0
 
 No functional changes to the library. Packaging, documentation, and supported Python versions only.
