@@ -3,9 +3,22 @@
 A wrapper for the Uptime Kuma Socket.IO API — with full v2 support
 ---
 
-> **Fork notice:** This is an actively maintained fork of [lucasheld/uptime-kuma-api](https://github.com/lucasheld/uptime-kuma-api), which appears to be unmaintained (last release: 2023, open PRs unanswered). This fork adds full Uptime Kuma v2.x support while maintaining backward compatibility with v1.x. Original work by [Lucas Held](https://github.com/lucasheld) — thank you for building the foundation.
+> **About this project:** uptime-kuma-api2 is an independent continuation of
+> [lucasheld/uptime-kuma-api](https://github.com/lucasheld/uptime-kuma-api),
+> the original library created by [Lucas Held](https://github.com/lucasheld).
+> That project appears to be unmaintained — its last release was in 2023, and
+> open issues and pull requests (including several adding Uptime Kuma 2.x
+> support) have sat unreviewed and unmerged. Rather than leave 2.x users
+> without a working library, this project carries the code forward with full
+> v2.x support while keeping backward compatibility with v1.x.
+>
+> It began as a fork and is published under the original MIT license. Lucas
+> Held's copyright is retained in [LICENSE](LICENSE) alongside the later
+> changes — full credit to him for building the foundation. This is a
+> continuation, not a replacement: if the original project becomes active
+> again, the changes here are available to contribute back upstream.
 
-> **Naming:** the PyPI distribution is `uptime-kuma-api2`, while the import package remains `uptime_kuma_api` so existing code works unchanged. The unrelated PyPI projects `uptime-kuma-api` (upstream) and `uptime-kuma-api-v2` (different maintainer) are not this fork.
+> **Naming:** the PyPI distribution is `uptime-kuma-api2`, while the import package remains `uptime_kuma_api` so existing code works unchanged. The similarly named PyPI projects `uptime-kuma-api` (the original) and `uptime-kuma-api-v2` (a different maintainer) are separate from this one. The repository was renamed from `uptime-kuma-api-v2` to `uptime-kuma-api2` to match the PyPI name; the old URL redirects automatically.
 
 uptime-kuma-api2 is a Python wrapper for the [Uptime Kuma](https://github.com/louislam/uptime-kuma) Socket.IO API.
 
@@ -17,7 +30,7 @@ Supported Uptime Kuma versions:
 
 | Uptime Kuma     | uptime-kuma-api2 |
 |-----------------|------------------|
-| 2.0.0 - 2.4.0   | 2.0.0 - 2.1.0    |
+| 2.0.0 - 2.4.0   | 2.0.0 - 2.2.1    |
 | 1.21.3 - 1.23.2 | 1.0.0 - 1.2.1    |
 | 1.17.0 - 1.21.2 | 0.1.0 - 0.13.0   |
 
@@ -35,14 +48,16 @@ pip install uptime-kuma-api2
 
 Documentation
 ---
-API documentation lives in the [`docs/`](docs/) directory of this repository and can be built locally with Sphinx:
+The API reference is published on [Read the Docs](https://uptime-kuma-api2.readthedocs.io).
+
+You can also build it locally with Sphinx:
 
 ```
 pip install -r dev-requirements.txt
 cd docs && make html
 ```
 
-Note: [uptime-kuma-api.readthedocs.io](https://uptime-kuma-api.readthedocs.io) is the upstream project's site and does not document this fork's v2 features.
+Note: [uptime-kuma-api.readthedocs.io](https://uptime-kuma-api.readthedocs.io) (without the `2`) is the *original* project's site and does not cover this project's v2 features.
 
 Example
 ---
@@ -61,7 +76,7 @@ Now you can call one of the existing methods of the instance. For example create
 ```python
 >>> result = api.add_monitor(type=MonitorType.HTTP, name="Google", url="https://google.com")
 >>> print(result)
-{'msg': 'Added Successfully.', 'monitorId': 1}
+{'msg': 'Added Successfully.', 'monitorID': 1}
 ```
 
 At the end, the connection to the API must be disconnected so that the program does not block.

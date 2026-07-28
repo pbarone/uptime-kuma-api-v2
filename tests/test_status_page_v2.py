@@ -114,6 +114,36 @@ class TestStatusPageV2(unittest.TestCase):
         self.assertNotIn("showOnlyLastHeartbeat", config)
         self.assertNotIn("rssTitle", config)
 
+    # --- Test 11: v2 analytics keys must be PRESENT even when None ---
+    def test_v2_analytics_keys_always_present_when_none(self):
+        """Regression: the v2 server rejects the save with "Invalid analytics
+        type" when analyticsType is absent from the payload. Verified against
+        2.4.0: null is accepted, an absent key is not. Omitting the key broke
+        save_status_page for every page with no analytics configured, which in
+        turn broke post_incident and unpin_incident (both call save)."""
+        _, config, _, _ = self.build_v2(slug="test", id=1, title="Test Page")
+        self.assertIn("analyticsType", config)
+        self.assertIsNone(config["analyticsType"])
+        self.assertIn("analyticsId", config)
+        self.assertIn("analyticsScriptUrl", config)
+
+    # --- Test 12: explicit None is still sent as null, not dropped ---
+    def test_v2_analytics_explicit_none_sent_as_null(self):
+        _, config, _, _ = self.build_v2(
+            slug="test", id=1, title="Test Page",
+            analyticsType=None, analyticsId=None, analyticsScriptUrl=None,
+        )
+        self.assertIsNone(config["analyticsType"])
+        self.assertIsNone(config["analyticsId"])
+        self.assertIsNone(config["analyticsScriptUrl"])
+
+    # --- Test 13: v1 must NOT gain the v2 analytics keys ---
+    def test_v1_analytics_keys_absent_when_none(self):
+        _, config, _, _ = self.build_v1(slug="test", id=1, title="Test Page")
+        self.assertNotIn("analyticsType", config)
+        self.assertNotIn("analyticsId", config)
+        self.assertNotIn("analyticsScriptUrl", config)
+
 
 if __name__ == '__main__':
     unittest.main()

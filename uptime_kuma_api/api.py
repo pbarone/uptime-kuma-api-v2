@@ -1275,13 +1275,18 @@ class UptimeKumaApi(object):
             })
 
         if parse_version(self.version) >= parse_version("2.0"):
-            # v2: use new analytics fields, omit googleAnalyticsId
-            if analyticsType is not None:
-                config["analyticsType"] = analyticsType
-            if analyticsId is not None:
-                config["analyticsId"] = analyticsId
-            if analyticsScriptUrl is not None:
-                config["analyticsScriptUrl"] = analyticsScriptUrl
+            # v2: use new analytics fields, omit googleAnalyticsId.
+            #
+            # These are sent unconditionally, including when None. The v2 server
+            # validates analyticsType and rejects the whole save with "Invalid
+            # analytics type" if the key is absent. Verified against 2.4.0:
+            # null is accepted, as are "google"/"plausible"/"umami", while an
+            # absent key, "" and "none" are all rejected. Omitting the key when
+            # no analytics are configured therefore broke save_status_page for
+            # every status page without analytics.
+            config["analyticsType"] = analyticsType
+            config["analyticsId"] = analyticsId
+            config["analyticsScriptUrl"] = analyticsScriptUrl
             # v2: omit password entirely (silently ignored)
             # v2: new fields
             if showOnlyLastHeartbeat is not None:
@@ -2160,6 +2165,11 @@ class UptimeKumaApi(object):
         """
         Get a status page.
 
+        Uptime Kuma 2.1.0 renamed the singular ``incident`` object to a plural
+        ``incidents`` array. Both keys are always returned regardless of server
+        version: ``incidents`` holds the full list, and ``incident`` holds the
+        first entry (or ``None``) for backward compatibility.
+
         :param str slug: Slug
         :return: The status page.
         :rtype: dict
@@ -2185,6 +2195,17 @@ class UptimeKumaApi(object):
                     'style': <IncidentStyle.DANGER: 'danger'>,
                     'title': 'title 1'
                 },
+                'incidents': [
+                    {
+                        'content': 'content 1',
+                        'createdDate': '2022-12-15 16:51:43',
+                        'id': 1,
+                        'lastUpdatedDate': None,
+                        'pin': 1,
+                        'style': <IncidentStyle.DANGER: 'danger'>,
+                        'title': 'title 1'
+                    }
+                ],
                 'maintenanceList': [],
                 'publicGroupList': [
                     {
@@ -2219,14 +2240,27 @@ class UptimeKumaApi(object):
         config = r1["config"]
         config.update(r2["config"])
 
+        # Uptime Kuma 2.1.0 renamed the singular, nullable "incident" object to
+        # a plural "incidents" array (louislam/uptime-kuma#6469). Accept either
+        # shape and expose both: "incidents" carries the full list, while
+        # "incident" keeps the first entry so existing v1-era callers still work.
+        if "incidents" in r2:
+            incidents = r2["incidents"] or []
+        elif r2.get("incident"):
+            incidents = [r2["incident"]]
+        else:
+            incidents = []
+
+        for incident in incidents:
+            parse_incident_style(incident)
+
         data = {
             **config,
-            "incident": r2.get("incident"),
+            "incident": incidents[0] if incidents else None,
+            "incidents": incidents,
             "publicGroupList": r2.get("publicGroupList", []),
             "maintenanceList": r2.get("maintenanceList", [])
         }
-        if data["incident"]:
-            parse_incident_style(data["incident"])
         # convert sendUrl from int to bool
         for i in data["publicGroupList"]:
             for j in i["monitorList"]:
@@ -2251,7 +2285,21 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.STATUS_PAGE_LIST):
-            return self._call('addStatusPage', (title, slug))
+            r = self._call('addStatusPage', (title, slug))
+
+            # Uptime Kuma does not send a status page list event when a status
+            # page is added, and wait_for_event only blocks while the cached
+            # value is None. An already-populated cache satisfies it instantly
+            # and never learns about the new page, so without this refresh
+            # get_status_pages() and delete_status_page() cannot see the page
+            # for the rest of the session. delete_status_page does the mirror
+            # of this on removal.
+            config = self._call('getStatusPage', slug)["config"]
+            if self._event_data[Event.STATUS_PAGE_LIST] is None:
+                self._event_data[Event.STATUS_PAGE_LIST] = {}
+            self._event_data[Event.STATUS_PAGE_LIST][str(config["id"])] = config
+
+            return r
 
     def delete_status_page(self, slug: str) -> dict:
         """
@@ -2339,6 +2387,7 @@ class UptimeKumaApi(object):
         """
         status_page = self.get_status_page(slug)
         status_page.pop("incident")
+        status_page.pop("incidents", None)  # v2.1.0+ shape, absent on older servers
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
         status_page.pop("googleAnalyticsId", None)  # v2 may still return this legacy field

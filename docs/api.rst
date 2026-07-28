@@ -10,6 +10,13 @@ Main Interface
     :inherited-members:
 
 
+MonitorBuilder
+--------------
+
+.. autoclass:: MonitorBuilder
+    :members:
+
+
 Enums
 -----
 
