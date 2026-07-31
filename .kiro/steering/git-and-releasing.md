@@ -44,9 +44,10 @@ history is Conventional-Commit-clean.
 - Merge via PR (`--merge`) and delete the branch after.
 - **Never force-push** or rewrite published history. Prefer new commits over
   amending anything already pushed.
-- `gh` targets the wrong repo here because of the `upstream` remote — always
-  pass `-R`: `-R pbarone/uptime-kuma-api2` for ours,
-  `-R lucasheld/uptime-kuma-api` for upstream.
+- The `upstream` remote that used to make `gh` target lucasheld's repo was
+  removed (2026-07-30), but keep passing `-R` anyway:
+  `-R pbarone/uptime-kuma-api2` for ours, `-R lucasheld/uptime-kuma-api` for
+  upstream.
 
 ## CHANGELOG discipline
 

@@ -111,7 +111,7 @@ PR #86 (https://github.com/lucasheld/uptime-kuma-api/pull/86) by @markus-seidl a
 - `get_monitors` refactor (changes event handling; author notes tests are "still flaky")
 - `conditions if conditions else list()` logic (bug: replaces intentional `[]` with new list)
 
-**PR #86 branch:** `pr-86` (fetched locally via `git fetch upstream refs/pull/86/head:pr-86`)
+**PR #86 branch:** `pr-86` (fetched locally via `git fetch https://github.com/lucasheld/uptime-kuma-api.git refs/pull/86/head:pr-86`)
 
 ---
 
