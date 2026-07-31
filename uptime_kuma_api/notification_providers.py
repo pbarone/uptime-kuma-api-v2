@@ -427,7 +427,7 @@ notification_provider_options = {
     NotificationType.SMTP: dict(
         smtpHost=dict(type="str", required=True),
         smtpPort=dict(type="int", required=True),
-        smtpSecure=dict(type="str", required=False),
+        smtpSecure=dict(type="bool", required=False),
         smtpIgnoreTLSError=dict(type="bool", required=False),
         smtpDkimDomain=dict(type="str", required=False),
         smtpDkimKeySelector=dict(type="str", required=False),

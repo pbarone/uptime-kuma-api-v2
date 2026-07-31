@@ -34,6 +34,7 @@ class TestStatusPageIncidents(unittest.TestCase):
         self.api = MagicMock(spec=UptimeKumaApi)
         self.api.url = "http://127.0.0.1:3001"
         self.api.timeout = 10
+        self.api.ssl_verify = True
         self.api._call = MagicMock(return_value={"config": {"id": 1, "slug": "slug1"}})
         self.get_status_page = UptimeKumaApi.get_status_page.__get__(self.api)
 

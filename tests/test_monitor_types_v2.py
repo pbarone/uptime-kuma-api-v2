@@ -16,6 +16,8 @@ class TestNewMonitorTypes(unittest.TestCase):
         # Create a mock instance that has the version property
         self.api = MagicMock(spec=UptimeKumaApi)
         self.api.version = "2.4.0"
+        # Bind the real version-gate choke point so gates parse self.version
+        self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
         # Bind _build_monitor_data to our mock so self.version resolves
         self.build = UptimeKumaApi._build_monitor_data.__get__(self.api)
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 import socketio
-from packaging.version import parse as parse_version
+from packaging.version import InvalidVersion, Version, parse as parse_version
 
 from . import (
     AuthMethod,
@@ -411,7 +411,7 @@ class UptimeKumaApi(object):
 
     Import UptimeKumaApi from the library and specify the Uptime Kuma server url (e.g. 'http://127.0.0.1:3001'), username and password to initialize the connection.
 
-        >>> from uptime_kuma_api import UptimeKumaApi
+        >>> from uptime_kuma_api import UptimeKumaApi, MonitorType
         >>> api = UptimeKumaApi('INSERT_URL')
         >>> api.login('INSERT_USERNAME', 'INSERT_PASSWORD')
         {
@@ -427,7 +427,7 @@ class UptimeKumaApi(object):
         ... )
         {
             'msg': 'Added Successfully.',
-            'monitorId': 1
+            'monitorID': 1
         }
 
     At the end, the connection to the API must be disconnected so that the program does not block.
@@ -438,7 +438,7 @@ class UptimeKumaApi(object):
 
     .. code-block:: python
 
-        from uptime_kuma_api import UptimeKumaApi
+        from uptime_kuma_api import UptimeKumaApi, MonitorType
 
         with UptimeKumaApi('INSERT_URL') as api:
             api.login('INSERT_USERNAME', 'INSERT_PASSWORD')
@@ -479,6 +479,7 @@ class UptimeKumaApi(object):
         self.timeout = timeout
         self.headers = headers
         self.wait_events = wait_events
+        self.ssl_verify = ssl_verify
 
         sio_kwargs = {"ssl_verify": ssl_verify}
         if logger is not None:
@@ -558,7 +559,10 @@ class UptimeKumaApi(object):
         return deepcopy(self._event_data[event].copy())
 
     def _call(self, event, data=None) -> Any:
-        r = self.sio.call(event, data, timeout=self.timeout)
+        try:
+            r = self.sio.call(event, data, timeout=self.timeout)
+        except socketio.exceptions.TimeoutError as e:
+            raise Timeout(e)
         if isinstance(r, dict) and "ok" in r:
             if not r["ok"]:
                 raise UptimeKumaException(r.get("msg"))
@@ -696,6 +700,23 @@ class UptimeKumaApi(object):
     def version(self) -> str:
         info = self.info()
         return info.get("version")
+
+    def _parsed_version(self) -> Version:
+        """
+        Parses the server version reported by :attr:`version` for version gating.
+
+        Some builds report a non-PEP440 version string (for example a nightly
+        build like ``2.0.0-dev-nightly-20240101``). Such a version is treated as
+        the newest possible version instead of raising, so version-gated code
+        paths keep working against these servers.
+
+        :return: The parsed server version, or a max sentinel if it is unparseable.
+        :rtype: Version
+        """
+        try:
+            return parse_version(self.version)
+        except InvalidVersion:
+            return parse_version("9999")  # treat unparseable as newest
 
     def _build_monitor_data(
             self,
@@ -862,7 +883,7 @@ class UptimeKumaApi(object):
             accepted_statuscodes = ["200-299"]
 
         if notificationIDList is None:
-            notificationIDList = {}
+            notificationIDList = []
 
         if conditions is not None and not isinstance(conditions, list):
             raise TypeError("conditions must be a list or None")
@@ -890,7 +911,7 @@ class UptimeKumaApi(object):
             "conditions": conditions if conditions is not None else [],
         }
 
-        if parse_version(self.version) >= parse_version("1.22"):
+        if self._parsed_version() >= parse_version("1.22"):
             data.update({
                 "parent": parent,
             })
@@ -899,7 +920,7 @@ class UptimeKumaApi(object):
             data.update({
                 "keyword": keyword,
             })
-            if parse_version(self.version) >= parse_version("1.23"):
+            if self._parsed_version() >= parse_version("1.23"):
                 data.update({
                     "invertKeyword": invertKeyword,
                 })
@@ -925,7 +946,7 @@ class UptimeKumaApi(object):
             "authMethod": authMethod,
         })
 
-        if parse_version(self.version) >= parse_version("1.23"):
+        if self._parsed_version() >= parse_version("1.23"):
             data.update({
                 "timeout": timeout,
             })
@@ -1041,7 +1062,7 @@ class UptimeKumaApi(object):
             data.update({
                 "game": game,
             })
-            if parse_version(self.version) >= parse_version("1.23"):
+            if self._parsed_version() >= parse_version("1.23"):
                 data.update({
                     "gamedigGivenPortOnly": gamedigGivenPortOnly,
                 })
@@ -1119,7 +1140,7 @@ class UptimeKumaApi(object):
                 data["mqttCheckType"] = mqttCheckType
 
         # v2-only parameters (gated behind version check)
-        if parse_version(self.version) >= parse_version("2.0"):
+        if self._parsed_version() >= parse_version("2.0"):
             # Network monitors: ipFamily
             network_types = [
                 MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
@@ -1245,7 +1266,7 @@ class UptimeKumaApi(object):
             rssTitle: str = None,
     ) -> tuple[str, dict, str, list]:
         if not theme:
-            if parse_version(self.version) >= parse_version("1.22"):
+            if self._parsed_version() >= parse_version("1.22"):
                 theme = "auto"
             else:
                 theme = "light"
@@ -1269,12 +1290,12 @@ class UptimeKumaApi(object):
             "footerText": footerText,
             "showPoweredBy": showPoweredBy,
         }
-        if parse_version(self.version) >= parse_version("1.23"):
+        if self._parsed_version() >= parse_version("1.23"):
             config.update({
                 "showCertificateExpiry": showCertificateExpiry,
             })
 
-        if parse_version(self.version) >= parse_version("2.0"):
+        if self._parsed_version() >= parse_version("2.0"):
             # v2: use new analytics fields, omit googleAnalyticsId.
             #
             # These are sent unconditionally, including when None. The v2 server
@@ -1555,7 +1576,12 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.MONITOR_LIST):
-            if id_ not in [i["id"] for i in self.get_monitors()]:
+            ids = [i["id"] for i in self.get_monitors()]
+            try:
+                id_ = int(id_)
+            except (TypeError, ValueError):
+                pass
+            if id_ not in ids:
                 raise UptimeKumaException("monitor does not exist")
             return self._call('deleteMonitor', id_)
 
@@ -1738,6 +1764,8 @@ class UptimeKumaApi(object):
         """
         r = self._call('addMonitorTag', (tag_id, monitor_id, value))
         # the monitor list event does not send the updated tags
+        if self._event_data[Event.MONITOR_LIST] is None:
+            self._event_data[Event.MONITOR_LIST] = {}
         self._event_data[Event.MONITOR_LIST][str(monitor_id)] = self.get_monitor(monitor_id)
         return r
 
@@ -1781,6 +1809,8 @@ class UptimeKumaApi(object):
                 raise UptimeKumaException("monitor tag does not exist")
             r = self._call('deleteMonitorTag', (tag_id, monitor_id, value))
             # the monitor list event does not send the updated tags
+            if self._event_data[Event.MONITOR_LIST] is None:
+                self._event_data[Event.MONITOR_LIST] = {}
             self._event_data[Event.MONITOR_LIST][str(monitor_id)] = self.get_monitor(monitor_id)
             return r
 
@@ -1963,7 +1993,12 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.NOTIFICATION_LIST):
-            if id_ not in [i["id"] for i in self.get_notifications()]:
+            ids = [i["id"] for i in self.get_notifications()]
+            try:
+                id_ = int(id_)
+            except (TypeError, ValueError):
+                pass
+            if id_ not in ids:
                 raise UptimeKumaException("notification does not exist")
             return self._call('deleteNotification', id_)
 
@@ -2125,7 +2160,12 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.PROXY_LIST):
-            if id_ not in [i["id"] for i in self.get_proxies()]:
+            ids = [i["id"] for i in self.get_proxies()]
+            try:
+                id_ = int(id_)
+            except (TypeError, ValueError):
+                pass
+            if id_ not in ids:
                 raise UptimeKumaException("proxy does not exist")
             return self._call('deleteProxy', id_)
 
@@ -2233,7 +2273,11 @@ class UptimeKumaApi(object):
         """
         r1 = self._call('getStatusPage', slug)
         try:
-            r2 = requests.get(f"{self.url}/api/status-page/{slug}", timeout=self.timeout).json()
+            r2 = requests.get(
+                f"{self.url}/api/status-page/{slug}",
+                timeout=self.timeout,
+                verify=self.ssl_verify
+            ).json()
         except requests.exceptions.Timeout as e:
             raise Timeout(e)
 
@@ -2935,7 +2979,12 @@ class UptimeKumaApi(object):
                 'msg': 'Deleted Successfully.'
             }
         """
-        if id_ not in [i["id"] for i in self.get_tags()]:
+        ids = [i["id"] for i in self.get_tags()]
+        try:
+            id_ = int(id_)
+        except (TypeError, ValueError):
+            pass
+        if id_ not in ids:
             raise UptimeKumaException("tag does not exist")
         return self._call('deleteTag', id_)
 
@@ -3071,11 +3120,11 @@ class UptimeKumaApi(object):
             "trustProxy": trustProxy
         }
 
-        if parse_version(self.version) >= parse_version("1.23"):
+        if self._parsed_version() >= parse_version("1.23"):
             data.update({
                 "chromeExecutable": chromeExecutable,
             })
-        if parse_version(self.version) >= parse_version("1.23.1"):
+        if self._parsed_version() >= parse_version("1.23.1"):
             data.update({
                 "nscd": nscd,
             })
@@ -3262,6 +3311,14 @@ class UptimeKumaApi(object):
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+
+        .. note::
+
+            An "API key" created in the Uptime Kuma web UI is not a credential for
+            this library. The UI "API key" cannot authenticate this socket.io API:
+            it only grants access to Uptime Kuma's Prometheus ``/metrics``
+            endpoint. Authenticate with a username and password, or with a login
+            token via :meth:`~login_by_token`.
 
         Example::
 
@@ -3530,7 +3587,12 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.DOCKER_HOST_LIST):
-            if id_ not in [i["id"] for i in self.get_docker_hosts()]:
+            ids = [i["id"] for i in self.get_docker_hosts()]
+            try:
+                id_ = int(id_)
+            except (TypeError, ValueError):
+                pass
+            if id_ not in ids:
                 raise UptimeKumaException("docker host does not exist")
             return self._call('deleteDockerHost', id_)
 
@@ -3892,7 +3954,12 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.MAINTENANCE_LIST):
-            if id_ not in [i["id"] for i in self.get_maintenances()]:
+            ids = [i["id"] for i in self.get_maintenances()]
+            try:
+                id_ = int(id_)
+            except (TypeError, ValueError):
+                pass
+            if id_ not in ids:
                 raise UptimeKumaException("maintenance does not exist")
             return self._call('deleteMaintenance', id_)
 
@@ -4205,7 +4272,12 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.API_KEY_LIST):
-            if id_ not in [i["id"] for i in self.get_api_keys()]:
+            ids = [i["id"] for i in self.get_api_keys()]
+            try:
+                id_ = int(id_)
+            except (TypeError, ValueError):
+                pass
+            if id_ not in ids:
                 raise UptimeKumaException("api key does not exist")
             return self._call('deleteAPIKey', id_)
 
