@@ -1,0 +1,742 @@
+{
+  "pbtResults": {
+    "1. Write Bug A bug-condition exploration test (new file `tests/test_delete_id_coercion_v2.py`)": {
+      "status": "passed",
+      "failingExample": "Bug condition reproduced at all 7 delete_* sites (14 subtest failures, red as expected on unfixed code).\n\nCounterexample shape: stored ids = [371] (int), caller passes \"371\" (str).\n\n- delete_monitor(\"371\")      -> UptimeKumaException: monitor does not exist\n- delete_notification(\"371\") -> UptimeKumaException: notification does not exist\n- delete_proxy(\"371\")        -> UptimeKumaException: proxy does not exist\n- delete_tag(\"371\")          -> UptimeKumaException: tag does not exist\n- delete_docker_host(\"371\")  -> UptimeKumaException: docker host does not exist\n- delete_maintenance(\"371\")  -> UptimeKumaException: maintenance does not exist\n- delete_api_key(\"371\")      -> UptimeKumaException: api key does not exist\n\nRaised at the guard `if id_ not in [i[\"id\"] for i in self.get_X()]` (api.py:1558, 1966, 2129, 2938, 3534, 3896, 4209); _call never invoked, so no delete reaches the server. The paired int form (e.g. delete_api_key(371)) succeeded in the same run, isolating the defect to type-blind membership testing.",
+      "lastRunTimestamp": 1785283118133
+    },
+    "2. Write Bug A preservation property test (in `tests/test_delete_id_coercion_v2.py`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1785283482205
+    },
+    "3.2 Verify Bug A exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785283675222
+    },
+    "3.3 Verify Bug A preservation test still passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785283720701
+    },
+    "5. Write Bug B bug-condition exploration test (`tests/test_status_page_v2.py`)": {
+      "status": "passed",
+      "failingExample": "Bug-condition exploration test correctly went RED on unfixed code (this is the success case):\n\nAssertionError: 'verify' not found in {'timeout': 10} : requests.get was called without any verify= argument (kwargs={'timeout': 10}); ssl_verify=False was ignored on the HTTP leg\n\nCounterexample: UptimeKumaApi(\"https://fake:3001\", ssl_verify=False).get_status_page(\"slug1\")\n  -> requests.get(f\"{self.url}/api/status-page/slug1\", timeout=10)   # no verify= kwarg at all\n  -> self.ssl_verify does not exist on the instance (grep: no `self.ssl_verify` in api.py)",
+      "lastRunTimestamp": 1785283995044
+    },
+    "6. Write Bug B preservation test (`tests/test_status_page_v2.py`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1785284130309
+    },
+    "7.2 Verify Bug B exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785284298606
+    },
+    "8. Write Bug C bug-condition exploration test (`tests/test_monitor_params_v2.py`)": {
+      "status": "passed",
+      "failingExample": "Both exploration tests failed on UNFIXED code, as required (red = bug confirmed).\n\nCounterexample 1 — add_monitor_tag(tag_id=1, monitor_id=7, value=\"test\") with\n_event_data[Event.MONITOR_LIST] = None:\n  uptime_kuma_api/api.py:1747\n    self._event_data[Event.MONITOR_LIST][str(monitor_id)] = self.get_monitor(monitor_id)\n  TypeError: 'NoneType' object does not support item assignment\n\nCounterexample 2 — delete_monitor_tag(tag_id=1, monitor_id=7, value=\"test\") with\n_event_data[Event.MONITOR_LIST] = None (tag-existence guard satisfied):\n  uptime_kuma_api/api.py:1790\n    self._event_data[Event.MONITOR_LIST][str(monitor_id)] = self.get_monitor(monitor_id)\n  TypeError: 'NoneType' object does not support item assignment\n\nRun: pytest tests/test_monitor_params_v2.py -v -> 2 failed, 36 passed.\nBoth failures land on the cache-write line only; _call was reached first in both\ncases, so the server call itself is unaffected — the crash is purely the\nunguarded item assignment into the None cache.",
+      "lastRunTimestamp": 1785284608865
+    },
+    "9. Write Bug C preservation test (`tests/test_monitor_params_v2.py`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1785284837695
+    },
+    "10.2 Verify Bug C exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785284967957
+    },
+    "10.3 Verify Bug C preservation test still passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785286214234
+    },
+    "11. Write Bug D bug-condition exploration test (`tests/test_monitor_params_v2.py`)": {
+      "status": "passed",
+      "failingExample": "Counterexamples confirming Bug D on UNFIXED code (4 failures, 42 pre-existing tests still pass):\n\n1) Version-gated path, nightly string:\n   _build_monitor_data(type=HTTP, name=\"test\", url=..., ipFamily=\"IPv4\", cacheBust=True) with version = \"2.0.0-dev-nightly-20240101\"\n   -> packaging.version.InvalidVersion: Invalid version: '2.0.0-dev-nightly-20240101'\n      raised at api.py:894  `if parse_version(self.version) >= parse_version(\"1.22\"):`\n\n2) Version-gated path, garbage string:\n   same call with version = \"not-a-version\"\n   -> packaging.version.InvalidVersion: Invalid version: 'not-a-version'\n\n3) Choke point missing (post-fix contract not yet implemented), both strings:\n   api._parsed_version()\n   -> AttributeError: '_VersionOnlyApi' object has no attribute '_parsed_version'",
+      "lastRunTimestamp": 1785286413570
+    },
+    "12. Write Bug D preservation property test (`tests/test_monitor_params_v2.py`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1785287661135
+    },
+    "13.2 Verify Bug D exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785326023923
+    },
+    "13.3 Verify Bug D preservation test still passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785326205175
+    },
+    "14. Write Bug E bug-condition exploration test (`tests/test_logger.py`)": {
+      "status": "passed",
+      "failingExample": "Counterexample (3 subtests, all red on unfixed code):\n\nSUBFAILED(event='getMonitorList') / SUBFAILED(event='add') / SUBFAILED(event='deleteMonitor')\ntests/test_logger.py::TestCallTimeoutTranslationBugCondition::test_call_raises_library_timeout_on_transport_timeout\n\n    uptime_kuma_api\\api.py:562: in _call\n        r = self.sio.call(event, data, timeout=self.timeout)\n    E   socketio.exceptions.TimeoutError: timed out waiting for callback\n\nExpected uptime_kuma_api.Timeout (an UptimeKumaException); the unfixed `_call`\nleaks socketio.exceptions.TimeoutError (SocketIOError -> Exception), which is\noutside the library hierarchy. 3 failed, 7 passed.",
+      "lastRunTimestamp": 1785326460327
+    },
+    "15. Write Bug E preservation test (`tests/test_logger.py`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1785326724618
+    },
+    "16.2 Verify Bug E exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785327430112
+    },
+    "16.3 Verify Bug E preservation test still passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785327563787
+    },
+    "17. Write Bug F bug-condition exploration/verification test (`tests/test_notification_v2.py`)": {
+      "status": "passed",
+      "failingExample": "All 6 Bug F exploration assertions failed against the UNFIXED code (expected):\n\n1. #69 smtpSecure declared type — AssertionError: 'str' != 'bool'\n   (notification_provider_options[NotificationType.SMTP][\"smtpSecure\"][\"type\"] == \"str\")\n\n2. #57 notificationIDList declared default — AssertionError: {} is not an instance of <class 'list'>\n   (_build_monitor_data(type=MonitorType.HTTP, name=\"test\", url=\"http://example.com\")[\"notificationIDList\"] == {})\n\n3. #78 class docstring >>> example — AssertionError: class docstring example raised NameError: name 'MonitorType' is not defined\n   (source line: `type=MonitorType.HTTP,` after `from uptime_kuma_api import UptimeKumaApi`)\n\n4. #78 class docstring context-manager code-block — AssertionError: ... raised NameError: name 'MonitorType' is not defined\n\n5. #80 documented add_monitor return key — AssertionError: \"'monitorID'\" not found in UptimeKumaApi.__doc__ (docstring shows 'monitorId': 1)\n\n6. #60/#73 auth note — AssertionError: [] is not true : auth note 'UI \"API key\" cannot authenticate this socket.io API' not found in any of: UptimeKumaApi class docstring, login docstring, login_by_token docstring, README.md\n\nThe 9 pre-existing tests in tests/test_notification_v2.py still pass (6 failed, 9 passed).",
+      "lastRunTimestamp": 1785356692459
+    },
+    "18. Write Bug F preservation test (`tests/test_notification_v2.py`)": {
+      "status": "passed",
+      "failingExample": "No counterexample - all 8 Property 12 preservation tests PASS against the UNFIXED code (the expected baseline outcome).\n\nObserved UNFIXED runtime baseline, now encoded:\n- _build_monitor_data declared default for notificationIDList: {} (task 19.3 changes it to [])\n- effective payload after _convert_monitor_input when unset: {} (dict)\n- effective payload for [1, 2]: {1: True, 2: True}\n- {} / [] / None declared defaults all yield the identical effective payload {} (both are falsy, so the `if kwargs[\"notificationIDList\"]:` branch is skipped either way)\n- _convert_monitor_return({\"1\": True, \"2\": True}) -> [1, 2]; an already-converted list passes through unchanged\n- every smtpSecure value (True, False, None, \"\", \"nofc\", \"secure\", 0, 1) is accepted by _build_notification_data + _check_arguments_notification and forwarded verbatim with its original type\n- smtpSecure is required=False and absent from notification_provider_conditions, so the declared type is never consumed by validation\n- SMTP required-arg set: smtpFrom, smtpHost, smtpPort\n\nRun: .venv\\Scripts\\python.exe -m pytest tests/test_notification_v2.py -v\nResult: 17 passed, 11 subtests passed, 6 failed (the 6 failures are the task-17 exploration tests, still red as expected).",
+      "lastRunTimestamp": 1785357117713
+    },
+    "19.4 Verify Bug F exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785415684144
+    },
+    "19.5 Verify Bug F preservation test still passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785415757309
+    }
+  },
+  "executionHistory": {
+    "1. Write Bug A bug-condition exploration test (new file `tests/test_delete_id_coercion_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282668803
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282682969
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283135116
+      }
+    ],
+    "2. Write Bug A preservation property test (in `tests/test_delete_id_coercion_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669267
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283143953
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283499871
+      }
+    ],
+    "3.1 Coerce the id at every `delete_*` guard in `uptime_kuma_api/api.py`": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669393
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283503247
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283648612
+      }
+    ],
+    "3.2 Verify Bug A exploration test now passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669531
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283651831
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283686181
+      }
+    ],
+    "3.3 Verify Bug A preservation test still passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669642
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283689852
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283733147
+      }
+    ],
+    "4. Wire the new test file into the CI unit-suite command": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669748
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283737041
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283803870
+      }
+    ],
+    "5. Write Bug B bug-condition exploration test (`tests/test_status_page_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669864
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283807982
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284015199
+      }
+    ],
+    "6. Write Bug B preservation test (`tests/test_status_page_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282669974
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284018538
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284144512
+      }
+    ],
+    "7.1 Store the flag and forward it to `requests.get` in `uptime_kuma_api/api.py`": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670091
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284147823
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284253265
+      }
+    ],
+    "7.2 Verify Bug B exploration test now passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670202
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284256946
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284310974
+      }
+    ],
+    "7.3 Verify Bug B preservation test still passes (and assert `verify=True` on default)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670315
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284314531
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284494173
+      }
+    ],
+    "8. Write Bug C bug-condition exploration test (`tests/test_monitor_params_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670415
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284500178
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284627200
+      }
+    ],
+    "9. Write Bug C preservation test (`tests/test_monitor_params_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670526
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284630935
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284851544
+      }
+    ],
+    "10.1 Add the None-guard in `add_monitor_tag` and `delete_monitor_tag` (`uptime_kuma_api/api.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670648
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284856425
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284931407
+      }
+    ],
+    "10.2 Verify Bug C exploration test now passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670737
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284934800
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284977600
+      }
+    ],
+    "10.3 Verify Bug C preservation test still passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282670887
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284982164
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785286226118
+      }
+    ],
+    "11. Write Bug D bug-condition exploration test (`tests/test_monitor_params_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671019
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785286230711
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785286430650
+      }
+    ],
+    "12. Write Bug D preservation property test (`tests/test_monitor_params_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671155
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785286434461
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785287685146
+      }
+    ],
+    "13.1 Add `_parsed_version()` and replace the ~10 gate sites (`uptime_kuma_api/api.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671293
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785287689317
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785325863746
+      }
+    ],
+    "13.2 Verify Bug D exploration test now passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671436
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785325880401
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326047760
+      }
+    ],
+    "13.3 Verify Bug D preservation test still passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671571
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326067041
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326222594
+      }
+    ],
+    "14. Write Bug E bug-condition exploration test (`tests/test_logger.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671726
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326238781
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326501595
+      }
+    ],
+    "15. Write Bug E preservation test (`tests/test_logger.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282671869
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326507897
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326743462
+      }
+    ],
+    "16.1 Wrap only the transport call in `_call` (`uptime_kuma_api/api.py` ~560)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672005
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326770659
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327280106
+      }
+    ],
+    "16.2 Verify Bug E exploration test now passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672194
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327296341
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327447803
+      }
+    ],
+    "16.3 Verify Bug E preservation test still passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672327
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327473346
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327616762
+      }
+    ],
+    "17. Write Bug F bug-condition exploration/verification test (`tests/test_notification_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672472
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327640705
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785356753641
+      }
+    ],
+    "18. Write Bug F preservation test (`tests/test_notification_v2.py`)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672616
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785356758932
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785357173084
+      }
+    ],
+    "19.1 Fix the docstring examples in `uptime_kuma_api/api.py`": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672758
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785357176897
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415072288
+      }
+    ],
+    "19.2 Add the auth-key documentation note (#60/#73)": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282672881
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415076457
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415272717
+      }
+    ],
+    "19.3 Correct provider metadata in `uptime_kuma_api/notification_providers.py`": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282673018
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415277497
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415627970
+      }
+    ],
+    "19.4 Verify Bug F exploration test now passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282673169
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415632766
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415696550
+      }
+    ],
+    "19.5 Verify Bug F preservation test still passes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282673318
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415700102
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415771719
+      }
+    ],
+    "20. Update `CHANGELOG.md` for the user-facing fixes": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282673452
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415775736
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785417818559
+      }
+    ],
+    "21. Checkpoint — run the CI unit suite and confirm all tests pass": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785282673602
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785417822392
+      },
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785419133331
+      }
+    ],
+    "3. Fix Bug A — generalise the id guard across all seven sites": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785283733297
+      }
+    ],
+    "7. Fix Bug B — store and forward `ssl_verify`": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785284494361
+      }
+    ],
+    "10. Fix Bug C — guard the monitor-list cache write": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785286226334
+      }
+    ],
+    "13. Fix Bug D — normalise version parsing behind one private choke point": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785326222758
+      }
+    ],
+    "16. Fix Bug E — translate socket.io timeouts in `_call`": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785327616932
+      }
+    ],
+    "19. Fix Bug F — docs and metadata corrections": [
+      {
+        "executionId": "afef3e95-3321-429e-b3d5-02f213910003",
+        "chatSessionId": "sess_074d2406-f836-4d1d-a76e-2632a5ae5880",
+        "timestamp": 1785415771896
+      }
+    ]
+  }
+}
