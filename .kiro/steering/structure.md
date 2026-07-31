@@ -21,15 +21,20 @@ UPSTREAM_TRIAGE.md          # local-only working notes (gitignored)
 
 - **v2 unit tests** (`test_monitor_types_v2.py`, `test_monitor_params_v2.py`,
   `test_status_page_v2.py`, `test_notification_v2.py`, `test_logger.py`,
-  `test_monitor_builder.py`, `test_status_page_incidents.py`): no live server,
-  mock the version/transport. **This is the CI suite.** Add regression tests here.
+  `test_monitor_builder.py`, `test_status_page_incidents.py`,
+  `test_delete_id_coercion_v2.py`): no live server, mock the version/transport.
+  **This is the CI suite.** Add regression tests here.
 - **Inherited integration tests** (`test_monitor.py`, `test_notification.py`,
   `test_status_page.py`, and the rest via `uptime_kuma_test_case.py`): require a
   live instance at `127.0.0.1:3001` and **wipe all its data** on setup. Not run
   in CI. Never point them at anything you care about.
 - **Live scripts** (`live_test_backup.py`, `live_test_create.py`,
-  `live_test_cleanup.py`): manual round-trip verification against a real 2.x
-  instance, driven by `tests/.env`. Not tests, not run by CI.
+  `live_test_cleanup.py`, `live_test_ssl_verify.py`, `live_test_delete_id.py`):
+  manual round-trip verification against a real 2.x instance, driven by
+  `tests/.env`. Not tests, not run by CI. `live_test_ssl_verify.py` additionally
+  needs an endpoint with a genuinely untrusted certificate, set via
+  `UPTIME_KUMA_SELFSIGNED_URL`. `live_test_delete_id.py` creates and deletes one
+  monitor, so point it at a disposable instance only.
 
 ## Where changes usually go
 
