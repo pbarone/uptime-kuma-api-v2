@@ -71,6 +71,8 @@ To do so, import `UptimeKumaApi` from the library and specify the Uptime Kuma se
 >>> api.login('INSERT_USERNAME', 'INSERT_PASSWORD')
 ```
 
+**Note on the Uptime Kuma "API key":** the *API key* you can create in the Uptime Kuma web UI is not a credential for this library. The UI "API key" cannot authenticate this socket.io API: it only grants access to Uptime Kuma's Prometheus `/metrics` endpoint. Authenticate with a username and password, or with a login token via `login_by_token()`.
+
 Now you can call one of the existing methods of the instance. For example create a new monitor:
 
 ```python
@@ -88,7 +90,7 @@ At the end, the connection to the API must be disconnected so that the program d
 With a context manager, the disconnect method is called automatically:
 
 ```python
-from uptime_kuma_api import UptimeKumaApi
+from uptime_kuma_api import UptimeKumaApi, MonitorType
 
 with UptimeKumaApi('INSERT_URL') as api:
     api.login('INSERT_USERNAME', 'INSERT_PASSWORD')
