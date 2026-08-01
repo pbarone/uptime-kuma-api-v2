@@ -547,6 +547,10 @@ the library's own behaviour — which is the acceptance test for the whole fix.
 
 #### 6. Changelog, compatibility argument, triage note, CI file list
 
+> **CORRECTED by a later commit — there is no 2.3.1 and there will not be one.**
+> The section described below was folded into the unreleased `### Release 2.3.0`,
+> which is where this entry now lives. Read `2.3.1` as `2.3.0` throughout.
+
 **`CHANGELOG.md`** — a new `### Release 2.3.1` section above `### Release 2.3.0`,
 with a `#### Bugfixes` entry and a `#### Notes` entry. The bugfix entry states
 the 2.x behaviour change with its server-source citation, the two-halves fix, the
