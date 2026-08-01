@@ -8,8 +8,11 @@ under the original MIT license.
 
 - **Import package:** `uptime_kuma_api` (never renamed — existing user code
   depends on it). **PyPI name:** `uptime-kuma-api2`.
-- Supports Uptime Kuma **1.17+ through 2.x from one codebase**. Server-version-
-  specific behavior is gated behind `parse_version(self.version)` checks.
+- Supports Uptime Kuma **1.21.3+ through 2.x from one codebase**. Server-
+  version-specific behavior is gated behind `parse_version(self.version)`
+  checks. The lowest gate in the code is `1.22`, so servers below that
+  deliberately take the pre-1.22 payload path; 1.21.3 is the declared support
+  floor, not the lowest branch.
 - **Backward compatibility with v1.x is not negotiable.** A change that breaks
   a v1.x connection is a regression.
 

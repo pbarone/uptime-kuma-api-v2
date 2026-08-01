@@ -14,8 +14,10 @@ license. **Import package:** `uptime_kuma_api` (never rename it). **PyPI name:**
 ## Non-negotiables
 
 - **Backward compatibility with Uptime Kuma v1.x is sacred.** The library
-  supports 1.17+ through 2.x from one codebase; gate server-version-specific
-  behavior behind `parse_version(self.version)`.
+  supports 1.21.3+ through 2.x from one codebase; gate server-version-specific
+  behavior behind `parse_version(self.version)`. (The lowest gate in the code is
+  `1.22`, so sub-1.22 servers take the pre-1.22 payload path — 1.21.3 is the
+  declared support floor, not the lowest branch.)
 - **Never run `pytest tests/` (bare) against a real Uptime Kuma instance** — the
   inherited integration tests delete all of its data. Run only the v2 unit
   files (see CONTRIBUTING.md).
