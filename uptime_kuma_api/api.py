@@ -506,6 +506,8 @@ class UptimeKumaApi(object):
         self.sio.on(Event.CONNECT, self._event_connect)
         self.sio.on(Event.DISCONNECT, self._event_disconnect)
         self.sio.on(Event.MONITOR_LIST, self._event_monitor_list)
+        self.sio.on(Event.UPDATE_MONITOR_INTO_LIST, self._event_update_monitor_into_list)
+        self.sio.on(Event.DELETE_MONITOR_FROM_LIST, self._event_delete_monitor_from_list)
         self.sio.on(Event.NOTIFICATION_LIST, self._event_notification_list)
         self.sio.on(Event.PROXY_LIST, self._event_proxy_list)
         self.sio.on(Event.STATUS_PAGE_LIST, self._event_status_page_list)
@@ -532,7 +534,17 @@ class UptimeKumaApi(object):
 
     @contextmanager
     def wait_for_event(self, event: Event) -> None:
-        # waits for the first event of the given type to arrive
+        # Waits for the FIRST event of the given type to arrive, and only that.
+        #
+        # The loop below runs while the cached entry is None, and nothing here
+        # ever resets that entry. So once the entry is populated -- for the
+        # monitor list, that happens at login -- this is a no-op that returns
+        # immediately.
+        #
+        # It therefore cannot be used to wait for a *refresh* of an already
+        # populated entry: a second event of the same type is never waited for.
+        # Callers that need fresh data must fetch it themselves; for the monitor
+        # list see _refresh_monitor_list.
 
         try:
             yield
@@ -569,6 +581,22 @@ class UptimeKumaApi(object):
             r.pop("ok")
         return r
 
+    def _refresh_monitor_list(self) -> None:
+        # Ask the server for a full monitorList and let _event_monitor_list
+        # replace the cache with it.
+        #
+        # This is deterministic, not hopeful: the server's getMonitorList
+        # handler emits monitorList and only then acks, socket.io delivers both
+        # on this connection in order, and the sync client dispatches events and
+        # acks on the same read-loop thread. So _event_monitor_list has already
+        # run by the time sio.call returns.
+        #
+        # Deliberately not version gated: getMonitorList exists in 1.23.X and
+        # 2.x, and reading self.version would route through info() ->
+        # _get_event_data, whose 0.2s wait_events sleep costs far more than the
+        # 2-6ms round trip it would be guarding.
+        self._call('getMonitorList')
+
     # event handlers
 
     def _event_connect(self) -> None:
@@ -579,6 +607,35 @@ class UptimeKumaApi(object):
 
     def _event_monitor_list(self, data) -> None:
         self._event_data[Event.MONITOR_LIST] = data
+
+    def _event_update_monitor_into_list(self, data) -> None:
+        # Uptime Kuma 2.x sends this instead of a full monitorList after add,
+        # edit, pause, resume and the monitor tag operations. The payload is
+        # {id: monitor}, string-keyed like monitorList, with one or more
+        # entries. v1.x never emits this event, so this handler is inert there.
+        monitors = self._event_data[Event.MONITOR_LIST]
+        # rebind rather than mutate: this runs on the socket.io read thread,
+        # while _get_event_data copies the same dict on the caller's thread
+        updated = {} if monitors is None else dict(monitors)
+        for monitor_id, monitor in data.items():
+            updated[str(monitor_id)] = monitor
+        self._event_data[Event.MONITOR_LIST] = updated
+
+    def _event_delete_monitor_from_list(self, monitor_id) -> None:
+        # Uptime Kuma 2.x sends this instead of a full monitorList after a
+        # delete, carrying the id alone. One event per monitor, so a group
+        # delete that cascades to children arrives as several of these.
+        # v1.x never emits this event, so this handler is inert there.
+        monitors = self._event_data[Event.MONITOR_LIST]
+        if monitors is None:
+            # No monitorList has arrived yet, so there is nothing to remove.
+            # Creating {} here would fabricate the "server has zero monitors"
+            # sentinel that _get_event_data relies on, and short-circuit the
+            # monitor-scoped events to [] while monitors may well exist.
+            return
+        updated = dict(monitors)
+        updated.pop(str(monitor_id), None)
+        self._event_data[Event.MONITOR_LIST] = updated
 
     def _event_notification_list(self, data) -> None:
         self._event_data[Event.NOTIFICATION_LIST] = data
@@ -717,6 +774,27 @@ class UptimeKumaApi(object):
             return parse_version(self.version)
         except InvalidVersion:
             return parse_version("9999")  # treat unparseable as newest
+
+    def _check_conditions_supported(self, conditions) -> None:
+        """
+        Rejects the v2-only ``conditions`` monitor field on a pre-2.0 server.
+
+        Raises rather than silently dropping, because ``conditions`` defines the
+        monitor's up/down semantics: a silently discarded value produces a
+        monitor that reports success against criteria the caller never set. The
+        other v2-only monitor fields are omitted silently instead, because they
+        change *how* the check runs rather than its verdict, so their loss is
+        observable to the caller.
+
+        :param list conditions: The caller-supplied conditions value, or None.
+        :raises UptimeKumaException: If conditions are requested on a server
+                                     older than 2.0.
+        """
+        if conditions and self._parsed_version() < parse_version("2.0"):
+            raise UptimeKumaException(
+                "conditions requires Uptime Kuma 2.0 or newer, "
+                f"but the server reports version {self.version}"
+            )
 
     def _build_monitor_data(
             self,
@@ -888,6 +966,8 @@ class UptimeKumaApi(object):
         if conditions is not None and not isinstance(conditions, list):
             raise TypeError("conditions must be a list or None")
 
+        self._check_conditions_supported(conditions)
+
         if responseMaxLength is not None and (responseMaxLength < 1 or responseMaxLength > 10_000_000):
             raise ValueError("responseMaxLength must be between 1 and 10,000,000")
 
@@ -908,7 +988,6 @@ class UptimeKumaApi(object):
             "resendInterval": resendInterval,
             "description": description,
             "httpBodyEncoding": httpBodyEncoding,
-            "conditions": conditions if conditions is not None else [],
         }
 
         if self._parsed_version() >= parse_version("1.22"):
@@ -1073,7 +1152,7 @@ class UptimeKumaApi(object):
                 "jsonPath": jsonPath,
                 "expectedValue": expectedValue,
             })
-            if jsonPathOperator is not None:
+            if jsonPathOperator is not None and self._parsed_version() >= parse_version("2.0"):
                 data["jsonPathOperator"] = jsonPathOperator
 
         # KAFKA_PRODUCER
@@ -1108,7 +1187,7 @@ class UptimeKumaApi(object):
                 "snmpOid": snmpOid,
                 "snmpVersion": snmpVersion,
             })
-            if snmp_v3_username is not None:
+            if snmp_v3_username is not None and self._parsed_version() >= parse_version("2.0"):
                 data["snmp_v3_username"] = snmp_v3_username
 
         # SMTP (monitor type)
@@ -1125,22 +1204,26 @@ class UptimeKumaApi(object):
 
         # PING-specific params
         if type == MonitorType.PING:
-            if ping_count is not None:
-                data["ping_count"] = ping_count
-            if ping_numeric is not None:
-                data["ping_numeric"] = ping_numeric
-            if ping_per_request_timeout is not None:
-                data["ping_per_request_timeout"] = ping_per_request_timeout
+            if self._parsed_version() >= parse_version("2.0"):
+                if ping_count is not None:
+                    data["ping_count"] = ping_count
+                if ping_numeric is not None:
+                    data["ping_numeric"] = ping_numeric
+                if ping_per_request_timeout is not None:
+                    data["ping_per_request_timeout"] = ping_per_request_timeout
 
         # MQTT new params
         if type == MonitorType.MQTT:
-            if mqttWebsocketPath is not None:
-                data["mqttWebsocketPath"] = mqttWebsocketPath
-            if mqttCheckType is not None:
-                data["mqttCheckType"] = mqttCheckType
+            if self._parsed_version() >= parse_version("2.0"):
+                if mqttWebsocketPath is not None:
+                    data["mqttWebsocketPath"] = mqttWebsocketPath
+                if mqttCheckType is not None:
+                    data["mqttCheckType"] = mqttCheckType
 
         # v2-only parameters (gated behind version check)
         if self._parsed_version() >= parse_version("2.0"):
+            data["conditions"] = conditions if conditions is not None else []
+
             # Network monitors: ipFamily
             network_types = [
                 MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
@@ -1576,6 +1659,7 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.MONITOR_LIST):
+            self._refresh_monitor_list()
             ids = [i["id"] for i in self.get_monitors()]
             try:
                 id_ = int(id_)
@@ -1731,6 +1815,7 @@ class UptimeKumaApi(object):
                 'msg': 'Saved.'
             }
         """
+        self._check_conditions_supported(kwargs.get("conditions"))
         data = self.get_monitor(id_)
         data.update(kwargs)
         _convert_monitor_input(data)
@@ -1796,6 +1881,7 @@ class UptimeKumaApi(object):
             }
         """
         with self.wait_for_event(Event.MONITOR_LIST):
+            self._refresh_monitor_list()
             tags = [
                 {
                     "monitor_id": y["monitor_id"],

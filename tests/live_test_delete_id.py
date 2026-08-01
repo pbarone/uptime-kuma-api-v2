@@ -36,20 +36,6 @@ Why this script exists at all:
     ``api.timeout`` and racing a normal call cannot work on Windows -- see
     Step 4's comment and UPSTREAM_TRIAGE section 8.
 
-TEMPORARY SCAFFOLDING -- remove when the monitor-list cache defect is fixed:
-    On Uptime Kuma 2.x the cached monitor list is not refreshed after
-    ``add_monitor``, so ``delete_monitor`` rejects an id that demonstrably
-    exists (UPSTREAM_TRIAGE section 7). Two things in this script exist only
-    because of that defect and must both be deleted once it is fixed:
-
-    1. the explicit ``api._call("getMonitorList")`` cache refresh in Step 2 and
-       in cleanup -- a workaround, NOT something the library should ever require
-       of callers;
-    2. the "KNOWN ISSUE" staleness check in Step 2, which detects the defect
-       directly and is informational only: it never affects the exit code, so
-       this script keeps reporting on Bug A rather than failing on an unrelated
-       known problem.
-
 Output is ASCII only. The Windows console defaults to cp1252 and raises
 UnicodeEncodeError on check marks, box-drawing characters and arrows, which has
 crashed a script mid-run before. Use PASS / FAIL / SKIP / ->.
@@ -85,7 +71,6 @@ from uptime_kuma_api import (
 PREFIX = "[TEST] "
 
 results = []
-known_issues = []
 
 
 def record(label: str, ok: bool, detail: str = "") -> bool:
@@ -107,18 +92,6 @@ def skip(label: str, reason: str) -> None:
     results.append((label, None, reason))
     print(f"  SKIP  {label}")
     print(f"          {reason}")
-
-
-def known_issue(label: str, detail: str) -> None:
-    """Report an already-diagnosed defect that this script is not testing.
-
-    Deliberately kept out of ``results``: these lines are informational and must
-    never influence the exit code. They exist so the script surfaces a known
-    problem instead of silently working around it.
-    """
-    known_issues.append((label, detail))
-    print(f"  INFO  KNOWN ISSUE: {label}")
-    print(f"          {detail}")
 
 
 def main() -> int:
@@ -158,37 +131,6 @@ def main() -> int:
         monitor_id = r["monitorID"]
         record("created throwaway monitor", True, f"monitorID={monitor_id!r}")
 
-        # --- KNOWN ISSUE probe (informational, does not affect the exit code) ---
-        # Detect the monitor-list cache staleness directly, before any refresh.
-        # On 2.x the server no longer broadcasts a full monitorList after a
-        # mutation (it emits updateMonitorIntoList, which the library has no
-        # handler for), so the id just returned by add_monitor is missing from
-        # get_monitors(). Remove this block together with the refresh below once
-        # the defect is fixed.
-        ids_before_refresh = [m["id"] for m in api.get_monitors()]
-        if monitor_id not in ids_before_refresh:
-            known_issue(
-                "monitor-list cache is stale after add_monitor",
-                f"id {monitor_id} is absent from get_monitors() immediately after "
-                f"add_monitor returned it (cached ids: {ids_before_refresh}). This is "
-                "the already-diagnosed 2.x cache defect in UPSTREAM_TRIAGE section 7, "
-                "NOT a new problem and NOT a Bug A regression: it reproduces with an "
-                "int id too. It gets its own spec. Reported as information only.",
-            )
-        else:
-            print(
-                f"  INFO  monitor-list cache already contains id {monitor_id}; the "
-                "section-7 staleness did not reproduce here"
-            )
-
-        # WORKAROUND for the known cache defect (UPSTREAM_TRIAGE section 7).
-        # delete_monitor's existence guard reads the cached monitor list, so
-        # without this refresh it rejects the id above and the string-id path
-        # under test is never reached -- the step would FAIL for a reason that
-        # has nothing to do with Bug A. Callers should NOT have to do this;
-        # delete this line when the cache defect is fixed.
-        api._call("getMonitorList")
-
         try:
             # Pre-fix: str(id) never matched the int ids from get_monitors(), so
             # this raised "monitor does not exist" and sent nothing.
@@ -203,12 +145,6 @@ def main() -> int:
             string_delete_ok = True
             record(f"delete_monitor(str({monitor_id})) does not raise", True)
 
-            # Same WORKAROUND again (UPSTREAM_TRIAGE section 7): 2.x answers a
-            # delete with deleteMonitorFromList, which the library also has no
-            # handler for, so without a refresh this read sees the pre-delete
-            # cache and reports a successful delete as a failure. Remove when
-            # the cache defect is fixed.
-            api._call("getMonitorList")
             remaining = [m["id"] for m in api.get_monitors()]
             gone = monitor_id not in remaining
             record(
@@ -335,11 +271,6 @@ def main() -> int:
                 f"delete_monitor({monitor_id}) with the int id"
             )
             try:
-                # Same WORKAROUND as Step 2 for the known cache defect
-                # (UPSTREAM_TRIAGE section 7): without the refresh the guard
-                # rejects the int id as well and the monitor is orphaned.
-                # Remove when the cache defect is fixed.
-                api._call("getMonitorList")
                 api.delete_monitor(monitor_id)
                 print(f"  deleted monitor {monitor_id} via the int-id fallback")
             except Exception as e:
@@ -379,13 +310,6 @@ def main() -> int:
             if ok is None:
                 print(f"  {label}")
                 print(f"    {detail}")
-
-    if known_issues:
-        print()
-        print("Known issues observed (informational, exit code unaffected):")
-        for label, detail in known_issues:
-            print(f"  {label}")
-            print(f"    {detail}")
 
     return 1 if failed else 0
 

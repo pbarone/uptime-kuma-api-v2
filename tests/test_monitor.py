@@ -184,6 +184,9 @@ class TestMonitor(UptimeKumaTestCase):
         self.do_test_monitor_type(expected_monitor)
 
     def test_monitor_type_dns(self):
+        if parse_version(self.api.version) < parse_version("2.0"):
+            self.skipTest("Unsupported in this Uptime Kuma version")
+
         expected_monitor = {
             "type": MonitorType.DNS,
             "name": "monitor 1",

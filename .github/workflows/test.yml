@@ -26,6 +26,7 @@ env:
     tests/test_monitor_builder.py
     tests/test_status_page_incidents.py
     tests/test_delete_id_coercion_v2.py
+    tests/test_monitor_cache_v2.py
 
 jobs:
   quick:
