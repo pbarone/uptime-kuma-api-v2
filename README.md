@@ -28,6 +28,20 @@ Python version 3.8+ is required. Tested on 3.8 through 3.13.
 
 Supported Uptime Kuma versions:
 
+| Uptime Kuma    | uptime-kuma-api2   |
+|----------------|--------------------|
+| 1.21.3 - 2.5.0 | 2.3.0 (unreleased) |
+
+One install covers both majors — there is no separate v1 line to pin to. Server-version-specific behaviour is gated at runtime, so the same package works against a 1.x and a 2.x server.
+
+The range above is what the project tests against. The Docker matrix in `run_tests.sh` exercises the version gate boundaries across it — 1.21.3, 1.22.x, 1.23.x, 2.0.0, 2.1.0 and 2.5.0 — and this tree was additionally live-verified end to end against 1.23.2 and 2.5.0.
+
+Uptime Kuma older than 1.21.3 is **not** supported: that support was dropped in uptime-kuma-api 1.0.0. If you run one of those servers, use 0.13.0.
+
+2.3.0 is **not yet published on PyPI** — the latest release you can install is 2.2.1, and the row above records what the current `main` supports.
+
+Earlier release lines, kept as a record of what each published version was documented to support:
+
 | Uptime Kuma     | uptime-kuma-api2 |
 |-----------------|------------------|
 | 2.0.0 - 2.4.0   | 2.0.0 - 2.2.1    |
@@ -126,13 +140,16 @@ with UptimeKumaApi('INSERT_URL') as api:
     print(result)
 ```
 
-New in v2.1.0
+What this adds over the original library
 ---
 - **New monitor types**: RabbitMQ, SNMP, SMTP, System Service
 - **New notification providers**: Nextcloud Talk, Brevo, Evolution API
 - **MonitorBuilder**: Fluent builder pattern for monitor configuration
 - **Logger support**: Pass a custom logger for Socket.IO debugging
 - **v2-only parameters**: Automatic version gating ensures backward compatibility with v1.x
+- **Fixes carried forward from the upstream tracker**, plus defects found by this project's own live verification against real 1.x and 2.x servers
+
+See [CHANGELOG.md](CHANGELOG.md) for the release-by-release detail — this list is deliberately not versioned, so it does not go stale one release at a time.
 
 Testing
 ---
@@ -140,7 +157,7 @@ The v2 unit tests need no live server. These are the tests CI runs:
 
 ```
 pip install pytest
-pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py tests/test_status_page_v2.py tests/test_notification_v2.py tests/test_logger.py tests/test_monitor_builder.py -v
+pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py tests/test_status_page_v2.py tests/test_notification_v2.py tests/test_logger.py tests/test_monitor_builder.py tests/test_status_page_incidents.py tests/test_delete_id_coercion_v2.py tests/test_monitor_cache_v2.py -v
 ```
 
 The remaining test files are integration tests inherited from upstream. They expect a live Uptime Kuma instance at `http://127.0.0.1:3001` and will **delete all monitors, notifications, proxies, tags, status pages, docker hosts, maintenances and API keys** on that instance, so never point them at a production server.
@@ -155,3 +172,6 @@ Test files:
 | `tests/test_notification_v2.py` | Nextcloud Talk, Brevo, Evolution API providers |
 | `tests/test_logger.py` | Logger parameter type validation |
 | `tests/test_monitor_builder.py` | MonitorBuilder fluent API |
+| `tests/test_status_page_incidents.py` | The `incident` -> `incidents` rename in Uptime Kuma 2.1.0: the `KeyError` and the silent data loss from reading only the singular key |
+| `tests/test_delete_id_coercion_v2.py` | String vs integer id in the existence guard of all seven `delete_*` methods (#91) |
+| `tests/test_monitor_cache_v2.py` | The 2.x `updateMonitorIntoList` / `deleteMonitorFromList` delta handlers and the refreshed `delete_monitor` / `delete_monitor_tag` guards |
