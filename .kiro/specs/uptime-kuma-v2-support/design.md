@@ -121,6 +121,8 @@ The library passes condition dicts through to the server without validation — 
     "type": "http",
     "name": "My Monitor",
     "conditions": [],          # <-- NEW: always present, defaults to empty list
+                               #     SUPERSEDED by conditions-field-v1-regression:
+                               #     present only when the server is >= 2.0
     "interval": 60,
     # ... other fields
 }
@@ -131,6 +133,14 @@ The library passes condition dicts through to the server without validation — 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
 ### Property 1: Default conditions is empty list
+
+> **SUPERSEDED by `.kiro/specs/conditions-field-v1-regression/` — this property now holds only for server versions >= 2.0.**
+> As written below it asserted presence unconditionally, which was correct only for Uptime Kuma 2.x. `conditions` is a
+> 2.x-only monitor field, so emitting it against a 1.x server made every `add_monitor()` call fail with
+> `SQLITE_ERROR: table monitor has no column named conditions` — a regression shipped in v2.1.0, v2.2.0 and v2.2.1.
+> The assignment now lives inside the `>= 2.0` gate, and on a pre-2.0 server the key is **absent** from the payload.
+> Properties 3 and 4 below assert presence the same way and are narrowed identically. Do not "restore" the
+> unconditional form: that is the regression, not a fix.
 
 *For any* valid monitor configuration (any MonitorType, any name, any combination of optional parameters) where the `conditions` parameter is not explicitly provided, `_build_monitor_data` SHALL produce a dict containing `"conditions": []`.
 

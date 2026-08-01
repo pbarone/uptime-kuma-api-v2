@@ -32,7 +32,8 @@ pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
        tests/test_status_page_v2.py tests/test_notification_v2.py \
        tests/test_logger.py tests/test_monitor_builder.py \
        tests/test_status_page_incidents.py \
-       tests/test_delete_id_coercion_v2.py -v
+       tests/test_delete_id_coercion_v2.py \
+       tests/test_monitor_cache_v2.py -v
 ```
 
 > **Do not run the full `pytest tests/`** against an Uptime Kuma instance you

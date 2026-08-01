@@ -22,7 +22,8 @@ UPSTREAM_TRIAGE.md          # local-only working notes (gitignored)
 - **v2 unit tests** (`test_monitor_types_v2.py`, `test_monitor_params_v2.py`,
   `test_status_page_v2.py`, `test_notification_v2.py`, `test_logger.py`,
   `test_monitor_builder.py`, `test_status_page_incidents.py`,
-  `test_delete_id_coercion_v2.py`): no live server, mock the version/transport.
+  `test_delete_id_coercion_v2.py`, `test_monitor_cache_v2.py`): no live server,
+  mock the version/transport.
   **This is the CI suite.** Add regression tests here.
 - **Inherited integration tests** (`test_monitor.py`, `test_notification.py`,
   `test_status_page.py`, and the rest via `uptime_kuma_test_case.py`): require a
@@ -35,6 +36,14 @@ UPSTREAM_TRIAGE.md          # local-only working notes (gitignored)
   needs an endpoint with a genuinely untrusted certificate, set via
   `UPTIME_KUMA_SELFSIGNED_URL`. `live_test_delete_id.py` creates and deletes one
   monitor, so point it at a disposable instance only.
+- **v1 live script** (`live_test_conditions_v1.py`): the odd one out — it targets
+  a **disposable Uptime Kuma 1.23.x container**, not the 2.x instance the scripts
+  above use, and it reads its own `UPTIME_KUMA_V1_URL` /
+  `UPTIME_KUMA_V1_USERNAME` / `UPTIME_KUMA_V1_PASSWORD` keys rather than the
+  `tests/.env` 2.x keys, so it cannot accidentally hit the 2.x target. It refuses
+  to run if the URL is unset (no default) and aborts unless the server reports
+  `1.23`. It creates monitors, so disposable instances only. Not part of the 2.x
+  backup → create → cleanup cycle; run it on its own.
 
 ## Where changes usually go
 
