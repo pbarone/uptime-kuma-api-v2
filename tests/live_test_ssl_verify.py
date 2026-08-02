@@ -33,14 +33,14 @@ crashed a script mid-run before. Use PASS / FAIL / SKIP / ->.
 
 Configuration:
     Add to tests/.env:
-        UPTIME_KUMA_SELFSIGNED_URL=https://kuma-ss.pbarone.com/
+        UPTIME_KUMA_SELFSIGNED_URL=https://kuma-selfsigned.example.com/
         UPTIME_KUMA_USERNAME=admin
         UPTIME_KUMA_PASSWORD=your-password
 
     UPTIME_KUMA_SELFSIGNED_URL must front the DISPOSABLE instance through Nginx
-    Proxy Manager using the custom self-signed certificate whose SAN is
-    kuma-ss.pbarone.com. The certificate has to be untrusted for this script to
-    prove anything; see the guard in step 1.
+    Proxy Manager using a custom self-signed certificate whose SAN is that same
+    hostname. The certificate has to be untrusted for this script to prove
+    anything; see the guard in step 1.
 
 Usage:
     .venv/Scripts/python tests/live_test_ssl_verify.py
@@ -118,13 +118,14 @@ def guard_endpoint_is_untrusted(url: str) -> None:
         "       behave identically and every check below would pass whether or\n"
         "       not the fix is present.\n"
         "\n"
-        "       Most likely cause: the Nginx Proxy Manager host for this\n"
-        "       hostname is serving the *.pbarone.com Let's Encrypt wildcard\n"
-        "       instead of the custom self-signed certificate.\n"
+        "       Most likely cause: the Nginx Proxy Manager host for that\n"
+        "       hostname is serving a publicly trusted certificate (typically a\n"
+        "       Let's Encrypt wildcard covering the parent domain) instead of\n"
+        "       the custom self-signed certificate.\n"
         "\n"
         "       Fix: open that proxy host in Nginx Proxy Manager, go to the SSL\n"
         "       tab, and select the custom self-signed certificate whose SAN is\n"
-        "       kuma-ss.pbarone.com. Then re-run this script."
+        "       the hostname shown above. Then re-run this script."
     )
 
 
