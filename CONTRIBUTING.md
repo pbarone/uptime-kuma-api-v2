@@ -72,6 +72,10 @@ The type guides the version bump (fix → patch, feat → minor, breaking → ma
 3. Fill in the PR checklist (tests, changelog, backward-compat, docs).
 4. A maintainer merges after review.
 
+`main` is branch-protected, so steps 1 and 2 are enforced rather than merely
+asked for: a direct push is rejected, a pull request is required, and the full
+Python 3.8–3.13 matrix must report green before the merge button unlocks.
+
 ## A note on AI-agent steering files
 
 This repo commits AI-agent guidance under `.kiro/steering/`. Because those
