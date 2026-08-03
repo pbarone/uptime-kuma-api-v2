@@ -176,6 +176,16 @@ Implement the full backlog of Uptime Kuma v2 support items in the `uptime-kuma-a
 1. WHEN the UptimeKumaApi receives the `info` event containing a `version` field after login, THE Library SHALL cache the server version string and make it available via the `version` property for use in subsequent payload-building operations
 2. WHEN `_build_monitor_data` includes v2-only parameters (parameters listed in the "New Monitor Parameters" section of the backlog that apply only to Uptime Kuma >= 2.0), THE Library SHALL include those parameters in the payload only when `parse_version(self.version) >= parse_version("2.0")`
 3. IF connected to a v1 instance (detected version < 2.0) and v2-only monitor parameters are provided by the caller, THEN THE Library SHALL omit those parameters from the payload without raising an error or logging a warning
+   > **NARROWED by `.kiro/specs/conditions-field-v1-regression/` — no longer blanket.** This remains the rule for every
+   > v2-only monitor parameter except one, including the seven that spec brought under the gate (`jsonPathOperator`,
+   > `snmp_v3_username`, `ping_count`, `ping_numeric`, `ping_per_request_timeout`, `mqttWebsocketPath`, `mqttCheckType`),
+   > which are omitted silently exactly as stated here. The exception is `conditions`: an explicitly supplied non-empty
+   > `conditions` list on a pre-2.0 server **raises `UptimeKumaException`** instead of being dropped, because that field
+   > defines the monitor's up/down semantics — a silent drop yields a monitor that reports success against criteria the
+   > caller never set, with no signal anywhere. The full severity argument, and the reasoning for keeping silent omission
+   > everywhere else, is in that spec's design under `## Cross-Spec Policy Conflict`. A uniform library-wide "dropped
+   > v2-only field" signal is a tracked follow-up; if it lands, the `conditions` raise can be retired and this
+   > requirement becomes blanket again.
 4. WHEN connected to a v2 instance (detected version >= 2.0), THE Library SHALL include all provided v2-only parameters in the payload without requiring the caller to perform version checks
 5. IF the `version` property is accessed before the `info` event has been received or the `info` event does not contain a `version` field, THEN THE Library SHALL raise an `UptimeKumaException` indicating that the server version is unavailable
 

@@ -13,3 +13,5 @@ tests/.live_test_ids.json
 tests/.backups/
 # Internal working note; contains candid triage assessments not meant for the public repo
 UPSTREAM_TRIAGE.md
+# Transient spec tooling state (chat session IDs, epoch timestamps); traceability lives in tasks.md
+.kiro/specs/*/tasks.meta.json

@@ -31,7 +31,9 @@ Unit tests (no live server — this is what CI runs):
 pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
        tests/test_status_page_v2.py tests/test_notification_v2.py \
        tests/test_logger.py tests/test_monitor_builder.py \
-       tests/test_status_page_incidents.py -v
+       tests/test_status_page_incidents.py \
+       tests/test_delete_id_coercion_v2.py \
+       tests/test_monitor_cache_v2.py -v
 ```
 
 Build + validate the package:

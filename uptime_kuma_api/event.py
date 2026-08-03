@@ -5,6 +5,8 @@ class Event(str, Enum):
     CONNECT = "connect"
     DISCONNECT = "disconnect"
     MONITOR_LIST = "monitorList"
+    UPDATE_MONITOR_INTO_LIST = "updateMonitorIntoList"
+    DELETE_MONITOR_FROM_LIST = "deleteMonitorFromList"
     NOTIFICATION_LIST = "notificationList"
     PROXY_LIST = "proxyList"
     STATUS_PAGE_LIST = "statusPageList"
