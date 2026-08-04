@@ -50,6 +50,41 @@ pip install -r dev-requirements.txt
 cd docs && make html   # docs/make.bat on Windows
 ```
 
+## GitHub and external lookups
+
+GitHub is interrogated with `gh` and `git`, **not** web search. Three
+repositories are in play, and `-R` is always passed explicitly rather than
+relying on the working directory:
+
+| Repository | `-R` value | What it answers |
+|---|---|---|
+| This project | `pbarone/uptime-kuma-api2` | our issues, PRs, releases, CI runs |
+| The original library | `lucasheld/uptime-kuma-api` | upstream triage, inherited issues and PRs |
+| The Uptime Kuma server | `louislam/uptime-kuma` | server behavior — when a field, monitor type or event appeared |
+
+For any question about **server** behavior — which version introduced a field, a
+monitor type, an event — the authoritative source is Uptime Kuma's own source
+and tags (`git log -S`, `git tag --contains`, `gh release view`), never a blog
+post or secondary summary. A wrong answer here becomes a wrong version gate, and
+a wrong version gate breaks v1.x.
+
+Web search is for things genuinely outside these repositories: security advisory
+details, PEP text, third-party library documentation. It is not how to answer a
+question a repository can answer.
+
+## Disposable test containers
+
+This workstation has no Docker. Disposable Uptime Kuma containers run on a
+separate host reached over SSH; its address and SSH user are recorded in the
+**gitignored** root `.env` as `DOCKER-HOST` / `DOCKER-USER`. Read them from
+there. They contain hyphens, so they are recorded values rather than consumable
+shell variables.
+
+**Never write that address, the SSH user, or any credential into a tracked
+file.** It has been scrubbed from this repo's history once already and is
+currently absent from it. Committed prose uses the `<docker-host>` and `<user>`
+placeholders the existing specs use.
+
 ## Critical safety rule
 
 **Never run the full `pytest tests/` against a real Uptime Kuma instance.** The
