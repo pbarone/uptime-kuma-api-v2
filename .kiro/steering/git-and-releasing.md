@@ -40,7 +40,13 @@ history is Conventional-Commit-clean.
 
 - **Never commit directly to `main`.** Work on a branch, open a PR, let CI run
   the full matrix, then merge.
-- Branch names: `fix/...`, `feat/...`, `docs/...`, `ci/...`.
+- Branch names: `<type>/<short-description>`, where `<type>` is the
+  Conventional Commit type of the change's dominant purpose — so any type from
+  the **Types** list above is valid (`feat`, `fix`, `docs`, `test`, `ci`,
+  `refactor`, `chore`), e.g. `chore/bump-jinja2-3-1-6`. Stated as a rule rather
+  than a fixed list of prefixes on purpose: a second enumerated list here would
+  duplicate the Types list and drift from it, which is the same failure mode as
+  the status-check coupling described below.
 - Merge via PR (`--merge`) and delete the branch after.
 - **Never force-push** or rewrite published history. Prefer new commits over
   amending anything already pushed.
