@@ -45,6 +45,27 @@ pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
 > keys) on the target during setup. They are meant for a disposable instance
 > (e.g. a throwaway Docker container).
 
+### Live verification (optional, maintainer-scoped)
+
+**A contribution does not need this.** The unit suite above requires no
+configuration and is the whole of what CI runs.
+
+Separately, `tests/live_test_*.py` are manual scripts that check round-trip
+behaviour against a real Uptime Kuma instance. They are `live_test_`-prefixed so
+pytest never collects them. They read their configuration from `tests/.env`:
+
+```
+cp tests/.env.example tests/.env    # then fill in your own values
+```
+
+`tests/.env.example` lists every key, which script consumes it, and what each is
+for. `tests/.env` is gitignored and must stay that way.
+
+These scripts **create and delete data** on whatever you point them at —
+`live_test_cleanup.py` deletes monitors, notifications and status pages — so use
+a disposable instance you own, and always run `live_test_cleanup.py --dry-run`
+before the real thing.
+
 ## What we look for in a change
 
 - **Reproduce before fixing.** Issue titles here often misdescribe the real
@@ -67,7 +88,10 @@ The type guides the version bump (fix → patch, feat → minor, breaking → ma
 
 ## Pull requests
 
-1. Work on a branch (`fix/...`, `feat/...`, `docs/...`), never commit to `main`.
+1. Work on a branch named `<type>/<short-description>`, where `<type>` is the
+   Conventional Commit type of the change's main purpose (so any of the types
+   listed above — e.g. `fix/...`, `docs/...`, `chore/...`). Never commit to
+   `main`.
 2. Open a PR against `main`; CI runs the full Python 3.8–3.13 matrix.
 3. Fill in the PR checklist (tests, changelog, backward-compat, docs).
 4. A maintainer merges after review.
