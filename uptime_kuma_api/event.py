@@ -2,6 +2,15 @@ from enum import Enum
 
 
 class Event(str, Enum):
+    """
+    Enumerate the socket.io event names the server emits.
+
+    Each member's value is the event name as it appears on the wire. The library
+    subscribes to these internally to maintain its cached view of monitors,
+    notifications, proxies, status pages and the rest; they are exported so that
+    callers can refer to an event by name rather than by string literal.
+    """
+
     CONNECT = "connect"
     DISCONNECT = "disconnect"
     MONITOR_LIST = "monitorList"
