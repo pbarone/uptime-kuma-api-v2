@@ -1,9 +1,8 @@
----
-inclusion: fileMatch
-fileMatchPattern: 'tests/**/*.py'
----
-
 # Testing standards
+
+Always included. It was previously `inclusion: fileMatch` on `tests/**/*.py`,
+which meant the ASCII-output rule below — the only place it is recorded outside a
+gitignored file — did not load until a test file happened to be in context.
 
 ## Where tests go
 

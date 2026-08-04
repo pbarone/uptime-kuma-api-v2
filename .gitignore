@@ -15,3 +15,6 @@ tests/.backups/
 UPSTREAM_TRIAGE.md
 # Transient spec tooling state (chat session IDs, epoch timestamps); traceability lives in tasks.md
 .kiro/specs/*/tasks.meta.json
+# Scratch files: PR/issue bodies drafted for `gh --body-file`, probe scripts,
+# captured output. See "Scratch files go in .temp/" in .kiro/steering/structure.md
+.temp/

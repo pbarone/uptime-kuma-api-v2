@@ -15,7 +15,23 @@ docs/                       # Sphinx: conf.py, api.rst (autodoc), index.rst, ins
 scripts/                    # code-generation helpers (build_*.py); not shipped runtime
 setup.py, CHANGELOG.md, README.md, .readthedocs.yaml
 UPSTREAM_TRIAGE.md          # local-only working notes (gitignored)
+.temp/                      # scratch files (gitignored) — see below
 ```
+
+## Scratch files go in `.temp/`
+
+Anything transient written into the working tree — a PR or issue body drafted for
+`gh --body-file`, a probe script, captured command output — goes in `.temp/`,
+which is gitignored as a whole. Create it if it isn't there.
+
+Do not scatter temp files at the repo root. Nothing there is ignored by default,
+so a file left behind shows up as untracked, `gh` warns about an uncommitted
+change on every call, and it is one careless `git add` away from being committed.
+`.temp/` makes a forgotten file harmless instead of a near miss, and it keeps the
+draft openable in the editor for review, which a system temp directory would not.
+
+Being gitignored does not make `.temp/` safe for secrets: treat it like
+`tests/.backups/`, which is also ignored and still holds plaintext credentials.
 
 ## tests/ taxonomy — know which is which
 
@@ -56,5 +72,5 @@ UPSTREAM_TRIAGE.md          # local-only working notes (gitignored)
 
 ## Never commit
 
-`tests/.env`, `tests/.backups/`, `tests/.live_test_ids.json`, and
+`tests/.env`, `tests/.backups/`, `tests/.live_test_ids.json`, `.temp/`, and
 `UPSTREAM_TRIAGE.md` are gitignored and hold secrets or transient state.
