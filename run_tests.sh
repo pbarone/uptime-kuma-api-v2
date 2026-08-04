@@ -35,8 +35,19 @@ do
   echo "Starting uptime kuma $version..."
   docker run -d -it --rm -p 3001:3001 --name uptimekuma "louislam/uptime-kuma:$version" > /dev/null
 
-  while [[ "$(curl -s -L -o /dev/null -w ''%{http_code}'' 127.0.0.1:3001)" != "200" ]]
+  readiness_timeout="${READINESS_TIMEOUT:-60}"
+  readiness_started_at=$SECONDS
+
+  while [[ "$(curl -s -L --max-time 1 -o /dev/null -w ''%{http_code}'' 127.0.0.1:3001)" != "200" ]]
   do
+    readiness_elapsed=$((SECONDS - readiness_started_at))
+    if (( readiness_elapsed >= readiness_timeout ))
+    then
+      echo "Timed out waiting for uptime kuma $version after ${readiness_elapsed}s."
+      echo "Stopping uptime kuma..."
+      docker stop uptimekuma > /dev/null
+      exit 1
+    fi
     sleep 0.5
   done
 
