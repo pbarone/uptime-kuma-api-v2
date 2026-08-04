@@ -30,7 +30,7 @@ Supported Uptime Kuma versions:
 
 | Uptime Kuma    | uptime-kuma-api2 |
 |----------------|------------------|
-| 1.21.3 - 2.5.0 | 2.3.0            |
+| 1.21.3 - 2.5.0 | 2.3.0 - 2.3.1    |
 
 One install covers both majors — there is no separate v1 line to pin to. Server-version-specific behaviour is gated at runtime, so the same package works against a 1.x and a 2.x server.
 
