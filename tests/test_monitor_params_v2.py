@@ -2188,5 +2188,398 @@ class TestConditionsGeneratedInputs(unittest.TestCase):
                     self.assertIs(result["conditions"][index], condition)
 
 
+# The four monitor types Uptime Kuma only implements from 2.x onward, each with
+# the minimum companion arguments its type-specific block needs.
+# ``_build_monitor_data`` does not run ``_check_arguments_monitor``
+# (``add_monitor`` does), so these bases only have to satisfy the block itself.
+# Provenance for the list -- upstream adding commit and first containing tag per
+# type, plus the observed 1.23.17 behaviour -- is in
+# .kiro/specs/v2-only-monitor-types-gate/pre-fix-evidence.md.
+V2_ONLY_TYPE_CASES = {
+    MonitorType.RABBITMQ: dict(
+        rabbitmqNodes=["http://127.0.0.1:15672"],
+        rabbitmqUsername="guest",
+        rabbitmqPassword="guest",
+    ),
+    MonitorType.SNMP: dict(
+        hostname="127.0.0.1",
+        port=161,
+        snmpOid="1.3.6.1.2.1.1.3.0",
+        snmpVersion="2c",
+        jsonPath="$",
+        expectedValue="1",
+    ),
+    MonitorType.SMTP: dict(hostname="127.0.0.1", port=25),
+    MonitorType.SYSTEM_SERVICE: dict(system_service_name="cron"),
+}
+
+# Monitor types that exist on both majors. These must be entirely unaffected by
+# the type gate, which is what keeps it from becoming a v1 regression of its own.
+NON_V2_ONLY_TYPE_CASES = {
+    MonitorType.HTTP: dict(url="http://x"),
+    MonitorType.PING: dict(hostname="127.0.0.1"),
+    MonitorType.PORT: dict(hostname="127.0.0.1", port=8080),
+    MonitorType.DNS: dict(
+        hostname="example.com",
+        dns_resolve_server="1.1.1.1",
+        port=53,
+    ),
+    MonitorType.PUSH: dict(),
+}
+
+
+class TestV2OnlyMonitorTypesV1Gate(unittest.TestCase):
+    """The four v2-only monitor types must not reach a pre-2.0 server.
+
+    A 1.x server has no implementation of ``rabbitmq``, ``snmp``, ``smtp`` or
+    ``system-service`` and does not validate ``type`` when a monitor is added --
+    ``Monitor.validate()`` checks interval bounds and nothing else, and the type
+    is first consulted at beat time. So an ungated request has two failure modes,
+    both bad and neither a clear verdict on the type:
+
+    * with the type's v2-only companion fields on the wire (what the library
+      sends today) the insert is rejected with ``SQLITE_ERROR: table monitor has
+      no column named <companion_column>`` -- an opaque error naming a database
+      column the caller never typed, after a full round trip;
+    * with those fields absent, a 1.23.17 server **accepts** the type, answers
+      ``Added Successfully.``, and creates a monitor that stays ``PENDING``
+      forever reporting ``Unknown Monitor Type`` -- verbatim evidence in
+      ``.kiro/specs/v2-only-monitor-types-gate/pre-fix-evidence.md``.
+
+    That second mode is why the gate belongs on the type and not only on the
+    fields: it is what a field-level gate would produce.
+    """
+
+    def setUp(self):
+        self.maxDiff = None
+
+    def _v1_api(self):
+        """Return a MagicMock UptimeKumaApi reporting a pre-2.0 server version.
+
+        The real ``_parsed_version`` and the real guards are bound on, so the
+        gate parses ``self.version`` for real -- a plain ``spec``'d MagicMock
+        would stub the guard out and the rejection would never run.
+        """
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = V1_VERSION
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(api)
+        )
+        api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(api)
+        )
+        return api
+
+    def _build_v1(self):
+        """Return a _build_monitor_data bound to a v1 mock."""
+        return UptimeKumaApi._build_monitor_data.__get__(self._v1_api())
+
+    def _assert_names_all_three(self, message, type_):
+        """The message must name the type, the required version and the observed one.
+
+        Requirement 2.2 asks for all three: a caller reading it has to be able to
+        tell *which* type is unsupported, *what* server version is needed, and
+        *what* their server actually reports. The type is asserted as its string
+        value rather than its repr, because str-Enum ``__format__`` differs across
+        Python 3.8-3.13 and the message must be stable on all of them.
+        """
+        self.assertIn(MonitorType(type_).value, message, message)
+        self.assertIn("2.0", message, message)
+        self.assertIn(V1_VERSION, message, message)
+
+    # ─── 1. each v2-only type is rejected on v1 ───────────────────────
+
+    def test_v2_only_types_raise_on_v1(self):
+        """All four v2-only types raise UptimeKumaException on a pre-2.0 server.
+
+        **Validates: Requirements 2.1, 2.2**
+        """
+        for type_, kwargs in V2_ONLY_TYPE_CASES.items():
+            with self.subTest(type=type_):
+                build = self._build_v1()
+                with self.assertRaises(UptimeKumaException) as ctx:
+                    build(type=type_, name="t", **kwargs)
+                self._assert_names_all_three(str(ctx.exception), type_)
+
+    def test_v2_only_type_raises_before_payload_is_built(self):
+        """The guard fires ahead of payload construction, not after.
+
+        Requirement 2.1 is "before any payload is built or sent". Passing a
+        deliberately invalid ``responseMaxLength`` alongside the v2-only type
+        proves ordering: that value trips a ``ValueError`` in the same preamble,
+        so whichever check runs first decides the exception type. The version
+        guard must win.
+
+        **Validates: Requirements 2.1**
+        """
+        build = self._build_v1()
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(
+                type=MonitorType.SNMP,
+                name="t",
+                responseMaxLength=0,
+                **V2_ONLY_TYPE_CASES[MonitorType.SNMP],
+            )
+        self._assert_names_all_three(str(ctx.exception), MonitorType.SNMP)
+
+    def test_raw_string_type_is_gated_like_the_enum_member(self):
+        """A bare "snmp" string is rejected exactly like MonitorType.SNMP.
+
+        ``MonitorType`` is a ``str`` Enum, so ``str.__hash__`` is inherited and
+        set membership matches either form. A caller who never imports
+        ``MonitorType`` and passes the raw string must not slip past the gate.
+
+        **Validates: Requirements 2.1, 2.2**
+        """
+        for type_ in V2_ONLY_TYPE_CASES:
+            with self.subTest(type=type_.value):
+                build = self._build_v1()
+                with self.assertRaises(UptimeKumaException) as ctx:
+                    build(
+                        type=type_.value,
+                        name="t",
+                        **V2_ONLY_TYPE_CASES[type_],
+                    )
+                self._assert_names_all_three(str(ctx.exception), type_)
+
+    # ─── 2. edit_monitor needs its own guard ──────────────────────────
+
+    def test_edit_monitor_v2_only_type_raises_before_any_server_call(self):
+        """edit_monitor rejects a v2-only type before it touches the server.
+
+        ``edit_monitor`` bypasses ``_build_monitor_data`` entirely -- it merges
+        ``get_monitor(id_)`` output and calls ``editMonitor`` directly -- so it
+        needs its own guard. Asserting that neither ``get_monitor`` nor ``_call``
+        was invoked is what proves the guard sits *ahead* of ``get_monitor(id_)``.
+
+        **Validates: Requirements 2.3**
+        """
+        for type_ in V2_ONLY_TYPE_CASES:
+            with self.subTest(type=type_):
+                api = self._v1_api()
+                api.get_monitor.return_value = dict(EDIT_MONITOR_EXISTING)
+                edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+
+                with self.assertRaises(UptimeKumaException) as ctx:
+                    edit_monitor(7, type=type_)
+
+                self._assert_names_all_three(str(ctx.exception), type_)
+                api.get_monitor.assert_not_called()
+                api._call.assert_not_called()
+
+    def test_edit_monitor_unrelated_field_does_not_raise_on_v1(self):
+        """Editing an unrelated field never trips the type gate.
+
+        The guard reads ``kwargs.get("type")``, not the merged ``data["type"]``,
+        so it fires only on what the caller explicitly asked for. Reading the
+        merged value would make ``edit_monitor(id_, interval=120)`` raise for a
+        monitor that already carries one of these types. This is the negative
+        assertion that pins that choice.
+
+        **Validates: Requirements 3.2**
+        """
+        api = self._v1_api()
+        api.get_monitor.return_value = dict(EDIT_MONITOR_EXISTING)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+
+        edit_monitor(7, interval=120)
+
+        api._call.assert_called_once()
+        self.assertEqual(api._call.call_args[0][0], "editMonitor")
+
+    # ─── 3. the builder is enforced at the api boundary ───────────────
+
+    def test_builder_v2_only_type_raises_on_v1(self):
+        """A MonitorBuilder config carrying a v2-only type raises on v1.
+
+        ``MonitorBuilder`` holds a plain dict with no server connection, so it is
+        version-blind by design and cannot enforce this itself. Its output can
+        only reach a server through ``add_monitor`` / ``edit_monitor``, so this
+        pins enforcement at that boundary -- which is what lets the builder stay
+        unchanged.
+
+        **Validates: Requirements 2.4**
+        """
+        config = (
+            MonitorBuilder()
+            .type(MonitorType.SNMP)
+            .name("t")
+            .hostname("127.0.0.1")
+            .build()
+        )
+        self.assertEqual(config["type"], MonitorType.SNMP)
+
+        build = self._build_v1()
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(**config)
+
+        self._assert_names_all_three(str(ctx.exception), MonitorType.SNMP)
+
+
+class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
+    """Everything the type gate must leave alone.
+
+    The gate is a v1 fix, and the way a v1 fix goes wrong is by narrowing v2 or by
+    catching types it should not. These are the negative assertions: a future
+    over-broad gate fails a test here rather than passing unnoticed.
+    """
+
+    def setUp(self):
+        self.maxDiff = None
+
+    def _api_for(self, version):
+        """Return a MagicMock UptimeKumaApi reporting the given server version."""
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(api)
+        )
+        api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(api)
+        )
+        return api
+
+    def _build_for(self, version):
+        """Return a _build_monitor_data bound to a mock at the given version."""
+        return UptimeKumaApi._build_monitor_data.__get__(self._api_for(version))
+
+    def test_v2_only_types_accepted_on_v2_with_companion_fields(self):
+        """On v2 all four types build a payload carrying their companion fields.
+
+        The gate must not narrow v2 in any way, so every companion argument is
+        asserted present in the built payload rather than merely "no exception
+        was raised".
+
+        **Validates: Requirements 3.1**
+        """
+        build = self._build_for("2.4.0")
+        # ``rabbitmqNodes`` is JSON-serialised on the way into the payload, so
+        # the expectation records the observed wire value rather than the input.
+        expected_companions = {
+            MonitorType.RABBITMQ: {
+                "rabbitmqNodes": '["http://127.0.0.1:15672"]',
+                "rabbitmqUsername": "guest",
+                "rabbitmqPassword": "guest",
+            },
+            MonitorType.SNMP: {
+                "snmpOid": "1.3.6.1.2.1.1.3.0",
+                "snmpVersion": "2c",
+            },
+            MonitorType.SMTP: {"smtpSecurity": "starttls"},
+            MonitorType.SYSTEM_SERVICE: {"system_service_name": "cron"},
+        }
+        for type_, kwargs in V2_ONLY_TYPE_CASES.items():
+            with self.subTest(type=type_):
+                result = build(type=type_, name="t", **kwargs)
+                self.assertEqual(result["type"], type_)
+                for key, value in expected_companions[type_].items():
+                    self.assertIn(key, result)
+                    self.assertEqual(result[key], value)
+
+    def test_non_v2_only_types_unaffected_on_v1(self):
+        """Types present on both majors raise nothing and build normally on v1.
+
+        The explicit no-raise assertion for the types the gate must not catch.
+
+        **Validates: Requirements 3.2**
+        """
+        for type_, kwargs in NON_V2_ONLY_TYPE_CASES.items():
+            with self.subTest(type=type_):
+                build = self._build_for(V1_VERSION)
+                result = build(type=type_, name="t", **kwargs)
+                self.assertEqual(result["type"], type_)
+
+    def test_v1_payload_for_a_shared_type_is_byte_identical(self):
+        """A v1 HTTP payload is unchanged by this fix, key for key.
+
+        Reuses the recorded pre-fix v1 baseline literal that the conditions spec
+        left behind, so this asserts against observed history rather than a
+        hand-derived expectation. If the type guard ever adds or removes a payload
+        key, this fails.
+
+        **Validates: Requirements 3.1, 3.2**
+        """
+        result = self._build_for(V1_VERSION)(
+            type=MonitorType.HTTP,
+            name="t",
+            url="http://x",
+        )
+        self.assertEqual(result, V1_HTTP_DEFAULT_PAYLOAD_WITHOUT_CONDITIONS)
+
+    def test_conditions_guard_still_wins_when_both_apply(self):
+        """A call tripping both version guards raises the conditions message.
+
+        The type check is wired *after* ``_check_conditions_supported``
+        deliberately, so a call that violates both keeps raising exactly what it
+        raises today. This is the ordering assertion for requirement 3.3 -- it
+        fails if the two calls are ever swapped.
+
+        **Validates: Requirements 3.3**
+        """
+        build = self._build_for(V1_VERSION)
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(
+                type=MonitorType.SNMP,
+                name="t",
+                conditions=SAMPLE_CONDITIONS,
+                **V2_ONLY_TYPE_CASES[MonitorType.SNMP],
+            )
+        message = str(ctx.exception)
+        self.assertIn("conditions", message, message)
+        self.assertNotIn("monitor type", message, message)
+
+    def test_unparseable_version_permits_v2_only_types(self):
+        """A nightly/garbage version string is treated as newest, so types pass.
+
+        The gate routes through ``_parsed_version()`` like every other gate, so a
+        server reporting a non-PEP440 build is treated as the newest version
+        rather than having all four types rejected.
+
+        **Validates: Requirements 3.7**
+        """
+        for raw_version in ("2.0.0-dev-nightly-20240101", "not-a-version"):
+            with self.subTest(version=raw_version):
+                # guard the premise: these really are unparseable
+                with self.assertRaises(InvalidVersion):
+                    parse_version(raw_version)
+                build = self._build_for(raw_version)
+                for type_, kwargs in V2_ONLY_TYPE_CASES.items():
+                    result = build(type=type_, name="t", **kwargs)
+                    self.assertEqual(result["type"], type_)
+
+    def test_monitor_type_enum_is_untouched(self):
+        """All four members still exist with their documented string values.
+
+        The fix gates these types; it does not remove, rename or re-value any of
+        them. A caller's ``MonitorType.SNMP`` keeps working against a 2.x server.
+
+        **Validates: Requirements 3.5**
+        """
+        self.assertEqual(MonitorType.RABBITMQ.value, "rabbitmq")
+        self.assertEqual(MonitorType.SNMP.value, "snmp")
+        self.assertEqual(MonitorType.SMTP.value, "smtp")
+        self.assertEqual(MonitorType.SYSTEM_SERVICE.value, "system-service")
+
+    def test_no_new_public_export(self):
+        """The type set and the guard stay private -- no new API surface.
+
+        Requirement 3.5. ``docs/api.rst`` is driven by autodoc over the public
+        exports, so an accidental export here would silently publish an internal.
+        """
+        import uptime_kuma_api
+
+        self.assertNotIn("_V2_ONLY_MONITOR_TYPES", dir(uptime_kuma_api))
+        self.assertNotIn("_check_monitor_type_supported", uptime_kuma_api.__all__
+                         if hasattr(uptime_kuma_api, "__all__") else [])
+        # nothing this fix introduced may be reachable from the package root
+        public = [n for n in dir(uptime_kuma_api) if not n.startswith("_")]
+        self.assertFalse(
+            [n for n in public if "V2_ONLY" in n.upper()],
+            f"unexpected public export: {public}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

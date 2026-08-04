@@ -32,6 +32,21 @@ Implement the full backlog of Uptime Kuma v2 support items in the `uptime-kuma-a
 5. WHEN `add_monitor` is called with `type=MonitorType.SYSTEM_SERVICE`, THE Monitor_Builder SHALL accept parameter `system_service_name` (str) and include it in the payload sent to the server
 6. THE `_check_arguments_monitor` function SHALL enforce required fields per new type: `MonitorType.RABBITMQ` requires `["rabbitmqNodes"]`, `MonitorType.SNMP` requires `["hostname", "snmpOid"]`, `MonitorType.SMTP` requires `["hostname"]`, and `MonitorType.SYSTEM_SERVICE` requires `["system_service_name"]`
 7. WHEN any new monitor type is created with all required fields populated, THE Library SHALL return a response containing `"msg": "Added Successfully."` and an integer `monitorID` with a value greater than 0
+   > **NARROWED by `.kiro/specs/v2-only-monitor-types-gate/` — now conditional on the server version.** This holds for
+   > servers at **2.0 or newer**. All four of these types are 2.x-only (`rabbitmq`, `snmp` and `smtp` from 2.0.0,
+   > `system-service` from 2.1.0; no 1.x tag contains any of them), so against a pre-2.0 server the Library now raises
+   > `UptimeKumaException: monitor type '<type>' requires Uptime Kuma 2.0 or newer, but the server reports version
+   > <observed>` before building or sending a payload. It does **not** return `Added Successfully.` there, and this
+   > requirement must not be read as promising that it does. The same gate applies to `edit_monitor` with an explicit
+   > `type`. Criteria 2-6 above are likewise reachable only on a 2.0+ server; on an older one the type is rejected before
+   > any of their parameters matter, and criterion 8's required-field validation still fires on both majors because a
+   > missing required field is a caller error regardless of server version.
+   >
+   > Worth recording for whoever revisits this: as written, criterion 7 was never satisfiable on v1 anyway. Verified
+   > against 1.23.17, an ungated request either failed with an opaque `SQLITE_ERROR` naming the type's companion column,
+   > or — with those columns absent — returned `Added Successfully.` and created a monitor stuck `PENDING` forever with
+   > `Unknown Monitor Type`. The gate replaces both with a clear client-side error; it does not remove a working path.
+   > Provenance, verbatim server output and the policy argument are in that spec's `pre-fix-evidence.md` and `design.md`.
 8. IF `add_monitor` is called with a new monitor type and a required field is missing, THEN THE Library SHALL raise a `TypeError` or equivalent validation error indicating the missing field name before sending any payload to the server
 
 ### Requirement 2: New Monitor Parameters for JSON_QUERY and Network Monitors
@@ -186,6 +201,13 @@ Implement the full backlog of Uptime Kuma v2 support items in the `uptime-kuma-a
    > everywhere else, is in that spec's design under `## Cross-Spec Policy Conflict`. A uniform library-wide "dropped
    > v2-only field" signal is a tracked follow-up; if it lands, the `conditions` raise can be retired and this
    > requirement becomes blanket again.
+   >
+   > **Scope pointer, not a further narrowing:** this requirement governs v2-only monitor **parameters**. It does not
+   > govern the four v2-only monitor **types** (`RABBITMQ`, `SNMP`, `SMTP`, `SYSTEM_SERVICE`), which
+   > `.kiro/specs/v2-only-monitor-types-gate/` **rejects** on a pre-2.0 server — see the annotation on requirement 1.7
+   > above. A type is not a parameter whose loss can be degraded; it is the thing being requested, so silent omission is
+   > not an available outcome for it. Noted here because a contributor scanning 13.3 for "the rule for v2-only things"
+   > will land on this text first and must not conclude that types are dropped silently too.
 4. WHEN connected to a v2 instance (detected version >= 2.0), THE Library SHALL include all provided v2-only parameters in the payload without requiring the caller to perform version checks
 5. IF the `version` property is accessed before the `info` event has been received or the `info` event does not contain a `version` field, THEN THE Library SHALL raise an `UptimeKumaException` indicating that the server version is unavailable
 
