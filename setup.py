@@ -37,7 +37,14 @@ setup(
     python_requires=">=3.8, <4",
     install_requires=[
         "python-socketio[client]>=5.0.0",
-        "packaging"
+        "packaging",
+        # api.py imports requests at module scope for the status-page HTTP
+        # fetch. It resolves in practice via python-socketio's [client] extra,
+        # which declares requests>=2.21.0 - but relying on that leaves a
+        # load-bearing import undeclared and invisible to dependency scanning.
+        # The floor matches the extra's, so no install that resolves today
+        # stops resolving.
+        "requests>=2.21.0"
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
