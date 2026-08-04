@@ -40,6 +40,19 @@ from .docstrings import (
 )
 
 
+# Monitor types Uptime Kuma only implements from 2.x onward. Each was added after
+# the 1.23 line closed and appears in no 1.x tag, so a pre-2.0 server has no
+# implementation of any of them and does not validate the type on the add path.
+# Provenance and observed v1 behaviour:
+# .kiro/specs/v2-only-monitor-types-gate/pre-fix-evidence.md
+_V2_ONLY_MONITOR_TYPES = frozenset({
+    MonitorType.RABBITMQ,
+    MonitorType.SNMP,
+    MonitorType.SMTP,
+    MonitorType.SYSTEM_SERVICE,
+})
+
+
 def int_to_bool(data, keys) -> None:
     if isinstance(data, list):
         for d in data:
@@ -796,6 +809,32 @@ class UptimeKumaApi(object):
                 f"but the server reports version {self.version}"
             )
 
+    def _check_monitor_type_supported(self, type_) -> None:
+        """
+        Rejects a v2-only monitor type on a pre-2.0 server.
+
+        Raises rather than proceeding, because a monitor type is not a parameter
+        whose loss can be degraded -- it is the thing being requested. A pre-2.0
+        server has no implementation of these types and does not validate the
+        type when a monitor is added, so an ungated request either fails with an
+        opaque ``SQLITE_ERROR`` naming a database column the caller never typed,
+        or -- once the type's v2-only companion fields are gated -- succeeds into
+        a monitor that stays ``PENDING`` forever reporting
+        ``Unknown Monitor Type``.
+
+        :param type_: The caller-supplied monitor type, or None.
+        :raises UptimeKumaException: If a v2-only monitor type is requested on a
+                                     server older than 2.0.
+        """
+        if type_ in _V2_ONLY_MONITOR_TYPES and self._parsed_version() < parse_version("2.0"):
+            # MonitorType(type_).value rather than interpolating type_ directly:
+            # str-Enum __format__ differs across Python 3.8-3.13, and the message
+            # must read 'snmp' on every supported interpreter.
+            raise UptimeKumaException(
+                f"monitor type '{MonitorType(type_).value}' requires Uptime Kuma "
+                f"2.0 or newer, but the server reports version {self.version}"
+            )
+
     def _build_monitor_data(
             self,
             type: MonitorType,
@@ -967,6 +1006,9 @@ class UptimeKumaApi(object):
             raise TypeError("conditions must be a list or None")
 
         self._check_conditions_supported(conditions)
+        # After the conditions guard on purpose: a call that trips both keeps
+        # raising the message it raised before the type gate existed.
+        self._check_monitor_type_supported(type)
 
         if responseMaxLength is not None and (responseMaxLength < 1 or responseMaxLength > 10_000_000):
             raise ValueError("responseMaxLength must be between 1 and 10,000,000")
@@ -1816,6 +1858,10 @@ class UptimeKumaApi(object):
             }
         """
         self._check_conditions_supported(kwargs.get("conditions"))
+        # kwargs, not the merged data below: the guard fires on what the caller
+        # explicitly asked for, so editing an unrelated field on a monitor that
+        # already carries a v2-only type cannot raise spuriously.
+        self._check_monitor_type_supported(kwargs.get("type"))
         data = self.get_monitor(id_)
         data.update(kwargs)
         _convert_monitor_input(data)
