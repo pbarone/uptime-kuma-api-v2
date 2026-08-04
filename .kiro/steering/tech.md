@@ -41,7 +41,22 @@ Build + validate the package:
 ```
 python -m build
 python -m twine check dist/*
+python scripts/check_sdist.py          # sdist contents; see the warning below
 ```
+
+`check_sdist.py` asserts the sdist holds `tests/uptime_kuma_test_case.py` and
+`CHANGELOG.md`, and allowlists everything else under `tests/` to `test_*.py` —
+so `tests/.env`, `tests/.backups/**` and `tests/live_test_*.py` cannot reach a
+published artifact. `publish.yml` runs it against `dist/*.tar.gz` between
+`twine check` and `twine upload`, so a release is already gated on it; run it by
+hand only when changing `MANIFEST.in`.
+
+**A local `python -m build` is not trustworthy on its own here.**
+`manifest_maker` reads an existing `*.egg-info/SOURCES.txt` back into the file
+list, so a tree that built once with a broad `MANIFEST.in` pattern keeps
+shipping those files after the pattern is reverted — reproduced at 111 members
+including `tests/.env`. CI is immune (fresh checkout); this workstation is not.
+`check_sdist.py` deletes the egg-info before building for exactly that reason.
 
 Build docs locally:
 

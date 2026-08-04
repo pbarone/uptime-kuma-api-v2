@@ -80,6 +80,13 @@ jobs:
       - name: Check distribution metadata
         run: twine check dist/*
 
+      # Last gate before an irreversible upload. Checks the exact tarball that
+      # is about to be published, not a rebuild of it: a broad MANIFEST.in
+      # pattern would otherwise sweep tests/.env and tests/.backups/** into it,
+      # and a published file cannot be withdrawn.
+      - name: Check sdist contents
+        run: python scripts/check_sdist.py "dist/*.tar.gz"
+
       - name: Upload to PyPI
         env:
           TWINE_USERNAME: __token__

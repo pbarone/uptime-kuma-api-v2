@@ -1,0 +1,28 @@
+# sdist contents.
+#
+# Without this file the sdist file list is setuptools' default, whose only
+# tests/ pattern is `tests/test*.py` (see `_add_defaults_optional` in
+# setuptools/_distutils/command/sdist.py). That pattern ships the 29
+# tests/test_*.py files but matches neither `tests/uptime_kuma_test_case.py` --
+# the base class every inherited integration test extends, without which none
+# of those 29 files can be imported from the sdist -- nor CHANGELOG.md, which
+# `project_urls` advertises.
+
+include CHANGELOG.md
+include tests/uptime_kuma_test_case.py
+
+# DO NOT broaden the two lines above into `recursive-include tests ...` or
+# `graft tests`.
+#
+# That same `tests/test*.py` default is the only reason `tests/.env`,
+# `tests/.backups/**` (config snapshots containing credentials) and
+# `tests/live_test_*.py` are absent from the published sdist: none of those
+# names begin with "test". That is a coincidence of spelling, not a policy. A
+# broad include here sweeps real credentials into a published artifact, and a
+# file published to PyPI cannot be withdrawn.
+#
+# Enforced by `scripts/check_sdist.py`, which allowlists the tests/ members of
+# a freshly built sdist and fails on anything else. Explicit `global-exclude`
+# lines were tried here instead and removed: matching nothing, they made
+# setuptools warn on every single build, and a build that always warns is a
+# build whose warnings stop being read.
