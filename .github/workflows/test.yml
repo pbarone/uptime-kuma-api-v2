@@ -13,21 +13,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-env:
-  # The v2 unit tests run without a live Uptime Kuma server. The remaining test
-  # files are integration tests that require an instance at 127.0.0.1:3001 and
-  # delete all of its data, so they are never run in CI.
-  V2_TESTS: >-
-    tests/test_monitor_types_v2.py
-    tests/test_monitor_params_v2.py
-    tests/test_status_page_v2.py
-    tests/test_notification_v2.py
-    tests/test_logger.py
-    tests/test_monitor_builder.py
-    tests/test_status_page_incidents.py
-    tests/test_delete_id_coercion_v2.py
-    tests/test_monitor_cache_v2.py
-
+# `pytest` with no arguments runs the unit suite and only the unit suite. The
+# destructive integration tests are deselected by pytest.ini, using a marker
+# tests/conftest.py derives from the UptimeKumaTestCase base class -- so there is
+# no list of test filenames here to drift out of step with publish.yml or the
+# docs, and adding a test file needs no change to this workflow.
+#
+# An empty collection exits 5, so a misconfiguration fails this job rather than
+# passing it green having run nothing.
 jobs:
   quick:
     name: quick (3.11)
@@ -50,7 +43,7 @@ jobs:
           pip install pytest
 
       - name: Run unit tests
-        run: pytest ${{ env.V2_TESTS }} -v
+        run: pytest -v
 
   full:
     name: full
@@ -78,4 +71,4 @@ jobs:
           pip install pytest
 
       - name: Run unit tests
-        run: pytest ${{ env.V2_TESTS }} -v
+        run: pytest -v

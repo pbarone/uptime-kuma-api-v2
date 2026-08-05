@@ -28,13 +28,18 @@ if parse_version(self.version) >= parse_version("2.0"):
 Unit tests (no live server — this is what CI runs):
 
 ```
-pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
-       tests/test_status_page_v2.py tests/test_notification_v2.py \
-       tests/test_logger.py tests/test_monitor_builder.py \
-       tests/test_status_page_incidents.py \
-       tests/test_delete_id_coercion_v2.py \
-       tests/test_monitor_cache_v2.py -v
+pytest -v
 ```
+
+That is the whole command, and it is the same one `test.yml` and `publish.yml`
+run. The nine-filename list this block used to carry is gone from all seven
+places that held a copy: `tests/conftest.py` marks a test `integration` when its
+class extends `UptimeKumaTestCase`, and `pytest.ini` deselects that marker by
+default. Do **not** reintroduce a file list — deriving it from the base class is
+the point, and a tenth test file should require no edit here.
+
+An empty collection exits 5, so a broken selection fails loudly rather than
+passing green having run nothing.
 
 Build + validate the package:
 
@@ -116,7 +121,18 @@ placeholders the existing specs use.
 
 ## Critical safety rule
 
-**Never run the full `pytest tests/` against a real Uptime Kuma instance.** The
+**Never run `pytest -m integration` against a real Uptime Kuma instance.** The
 inherited integration tests delete every monitor, notification, proxy, tag,
 status page, docker host, maintenance and API key on the target during setup.
-Run only the unit files listed above unless you have a disposable instance.
+
+The shape of this rule changed once the marker landed, and the change is worth
+being precise about rather than trusting muscle memory. It used to read "never
+run the full `pytest tests/`", because bare `pytest` collected the destructive
+tests and the only protection was remembering to name the nine unit files.
+`pytest.ini` now deselects the `integration` marker by default, so **bare
+`pytest` is safe** and the dangerous invocation is the explicit opt-in above.
+
+That closes the accident but not the deliberate mistake: `-m integration`,
+`-m ""` and `unittest discover` all still reach every destructive test. Use
+`./run_tests.sh`, which creates and destroys its own containers per server
+version, or a disposable instance you are willing to lose.

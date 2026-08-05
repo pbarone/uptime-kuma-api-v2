@@ -50,11 +50,16 @@ REQUIRED = [
     "LICENSE",
     "setup.py",
     "tests/uptime_kuma_test_case.py",
+    # Test selection config must travel with the tests. Without these, `pytest`
+    # in an unpacked sdist collects the destructive integration tests with
+    # nothing deselecting them.
+    "pytest.ini",
+    "tests/conftest.py",
 ]
 
 # Anything under tests/ that is not one of these is a violation. Allowlist
 # rather than denylist: the risk is a file nobody listed, not a known-bad one.
-ALLOWED_TESTS_EXACT = {"tests/uptime_kuma_test_case.py"}
+ALLOWED_TESTS_EXACT = {"tests/uptime_kuma_test_case.py", "tests/conftest.py"}
 ALLOWED_TESTS_GLOB = "tests/test_*.py"
 
 

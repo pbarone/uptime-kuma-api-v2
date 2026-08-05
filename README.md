@@ -151,14 +151,22 @@ See [CHANGELOG.md](CHANGELOG.md) for the release-by-release detail — this list
 
 Testing
 ---
-The v2 unit tests need no live server. These are the tests CI runs:
+The v2 unit tests need no live server, and are what a bare `pytest` runs. This is also exactly what CI runs:
 
 ```
 pip install pytest
-pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py tests/test_status_page_v2.py tests/test_notification_v2.py tests/test_logger.py tests/test_monitor_builder.py tests/test_status_page_incidents.py tests/test_delete_id_coercion_v2.py tests/test_monitor_cache_v2.py -v
+pytest -v
 ```
 
-The remaining test files are integration tests inherited from upstream. They expect a live Uptime Kuma instance at `http://127.0.0.1:3001` and will **delete all monitors, notifications, proxies, tags, status pages, docker hosts, maintenances and API keys** on that instance, so never point them at a production server.
+The remaining test files are integration tests inherited from upstream. They expect a live Uptime Kuma instance at `http://127.0.0.1:3001` and will **delete all monitors, notifications, proxies, tags, status pages, docker hosts, maintenances and API keys** on that instance, so never point them at a production server. They are excluded from a plain `pytest` run for that reason — opting in is explicit:
+
+```
+pytest -m integration     # DESTRUCTIVE: disposable instances only
+```
+
+The exclusion is not a list of filenames anyone maintains. `tests/conftest.py` marks a test `integration` when its class extends `UptimeKumaTestCase`, the base class whose `setUp` performs those deletions, and `pytest.ini` deselects that marker by default. So "needs a live server" is read off the code rather than restated, and adding a test file requires no change to CI, to the workflows, or to any command in this README.
+
+The table below is coverage documentation, not a list anything executes — letting it fall behind degrades the docs, it cannot silently un-run a test.
 
 Test files:
 

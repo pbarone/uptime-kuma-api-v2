@@ -31,19 +31,33 @@ pip install -r dev-requirements.txt   # only needed to build docs
 Run the unit suite — no server required, this is what CI runs:
 
 ```
-pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
-       tests/test_status_page_v2.py tests/test_notification_v2.py \
-       tests/test_logger.py tests/test_monitor_builder.py \
-       tests/test_status_page_incidents.py \
-       tests/test_delete_id_coercion_v2.py \
-       tests/test_monitor_cache_v2.py -v
+pytest -v
 ```
 
-> **Do not run the full `pytest tests/`** against an Uptime Kuma instance you
-> care about. The inherited integration tests delete **all** data (monitors,
-> notifications, proxies, tags, status pages, docker hosts, maintenances, API
-> keys) on the target during setup. They are meant for a disposable instance
-> (e.g. a throwaway Docker container).
+That is the whole command. There is no list of test files to keep in step:
+`tests/conftest.py` marks a test `integration` when its class extends
+`UptimeKumaTestCase` — the base class whose `setUp` connects to a server and
+deletes everything on it — and `pytest.ini` deselects that marker by default.
+Adding a test file therefore needs no change here, in the workflows, or in the
+README. A new unit test runs because it does not extend that base class; a new
+integration test is excluded because it does.
+
+> **The integration tests delete all data on the instance they reach** —
+> monitors, notifications, proxies, tags, status pages, docker hosts,
+> maintenances and API keys — during setup. They are meant for a disposable
+> instance such as a throwaway Docker container, never one you care about.
+>
+> A bare `pytest` no longer runs them, so the old footgun is closed by default.
+> Running them is deliberate and explicit:
+>
+> ```
+> pytest -m integration        # DESTRUCTIVE
+> ```
+>
+> `./run_tests.sh` is the maintained way to do it safely: it creates and
+> destroys its own containers per server version. It drives the tests through
+> `unittest discover`, which ignores pytest markers, so it runs the full suite
+> regardless of the default above.
 
 ### Live verification (optional, maintainer-scoped)
 
