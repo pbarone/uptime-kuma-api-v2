@@ -1,8 +1,6 @@
 import unittest
 from urllib import parse
 
-import pyotp
-
 from uptime_kuma_test_case import UptimeKumaTestCase
 
 
@@ -13,6 +11,22 @@ def parse_secret(uri):
 
 
 def generate_token(secret):
+    # Imported here rather than at module scope. pytest applies the
+    # `integration` marker AFTER collection, and collection imports every test
+    # module -- so a module-scope `import pyotp` aborts collection of the whole
+    # session when pyotp is absent, taking the unit suite down over a dependency
+    # of a test that run deselects anyway. That is what happened when the marker
+    # landed: CI has no pyotp (it is declared in dev-requirements.txt, which the
+    # test jobs do not install), and all six matrix jobs died at
+    # `ERROR collecting tests/test_2fa.py` having run nothing.
+    #
+    # A lazy import rather than pytest.importorskip, because run_tests.sh drives
+    # these tests through `unittest discover` and this module should not need
+    # pytest importable to run. Nothing is silently skipped either: whoever
+    # actually runs this test still gets a plain ModuleNotFoundError if pyotp is
+    # missing, which is the right outcome for a dependency they asked to use.
+    import pyotp
+
     totp = pyotp.TOTP(secret)
     return totp.now()
 
