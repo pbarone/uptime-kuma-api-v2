@@ -11,6 +11,14 @@
 include CHANGELOG.md
 include tests/uptime_kuma_test_case.py
 
+# The test selection config travels with the tests it governs. Without these
+# two, `pytest` inside an unpacked sdist would collect the destructive
+# integration tests with nothing deselecting them -- the shipped tests would
+# behave differently, and more dangerously, than the same tests in the repo.
+# Neither matches the `tests/test*.py` default, so both need naming here.
+include pytest.ini
+include tests/conftest.py
+
 # DO NOT broaden the two lines above into `recursive-include tests ...` or
 # `graft tests`.
 #

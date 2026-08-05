@@ -5,25 +5,15 @@ on:
     tags:
       - "v*"
 
-env:
-  # The v2 unit tests run without a live Uptime Kuma server. The remaining test
-  # files are integration tests that require an instance at 127.0.0.1:3001 and
-  # delete all of its data, so they are never run in CI.
-  #
-  # This list is duplicated from .github/workflows/test.yml, which is
-  # authoritative. Keep the two blocks identical — if you add or remove a v2
-  # unit test file, update both.
-  V2_TESTS: >-
-    tests/test_monitor_types_v2.py
-    tests/test_monitor_params_v2.py
-    tests/test_status_page_v2.py
-    tests/test_notification_v2.py
-    tests/test_logger.py
-    tests/test_monitor_builder.py
-    tests/test_status_page_incidents.py
-    tests/test_delete_id_coercion_v2.py
-    tests/test_monitor_cache_v2.py
-
+# `pytest` with no arguments runs the unit suite and only the unit suite,
+# deselecting the destructive integration tests via pytest.ini and the marker
+# tests/conftest.py derives from the UptimeKumaTestCase base class. This file
+# used to carry its own copy of a nine-filename list with a comment instructing
+# that it be kept identical to the one in test.yml; there is now nothing to keep
+# in step.
+#
+# An empty collection exits 5, so a misconfigured gate fails the job instead of
+# reporting success to `needs:` having run no tests.
 jobs:
   # Gate: a PyPI upload cannot be undone and the version number is burned
   # permanently, so tests and a tag/version match are verified before building.
@@ -47,7 +37,7 @@ jobs:
           pip install pytest
 
       - name: Run unit tests
-        run: pytest ${{ env.V2_TESTS }} -v
+        run: pytest -v
 
   publish:
     needs: test

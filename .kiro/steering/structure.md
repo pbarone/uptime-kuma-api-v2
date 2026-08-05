@@ -35,16 +35,23 @@ Being gitignored does not make `.temp/` safe for secrets: treat it like
 
 ## tests/ taxonomy — know which is which
 
-- **v2 unit tests** (`test_monitor_types_v2.py`, `test_monitor_params_v2.py`,
-  `test_status_page_v2.py`, `test_notification_v2.py`, `test_logger.py`,
-  `test_monitor_builder.py`, `test_status_page_incidents.py`,
-  `test_delete_id_coercion_v2.py`, `test_monitor_cache_v2.py`): no live server,
-  mock the version/transport.
-  **This is the CI suite.** Add regression tests here.
-- **Inherited integration tests** (`test_monitor.py`, `test_notification.py`,
-  `test_status_page.py`, and the rest via `uptime_kuma_test_case.py`): require a
-  live instance at `127.0.0.1:3001` and **wipe all its data** on setup. Not run
-  in CI. Never point them at anything you care about.
+The two categories are distinguished **mechanically**, not by a list anyone
+maintains: a test needs a live server exactly when its class extends
+`UptimeKumaTestCase`. `tests/conftest.py` marks those `integration` and
+`pytest.ini` deselects that marker, so `pytest` is the unit suite and
+`pytest -m integration` is the destructive one. Deliberately no filenames are
+enumerated below — an earlier version of this section listed all nine unit files
+and was one of seven copies that had to be edited in lockstep.
+
+- **v2 unit tests** — every `tests/test_*.py` that does **not** extend
+  `UptimeKumaTestCase`. No live server; they mock the version and transport.
+  **This is the CI suite**, and what a bare `pytest` runs. Add regression tests
+  here; no CI or docs change is needed when you do.
+- **Inherited integration tests** — every `tests/test_*.py` that **does** extend
+  `UptimeKumaTestCase` (`test_monitor.py`, `test_notification.py`,
+  `test_status_page.py` and the rest). Require a live instance at
+  `127.0.0.1:3001` and **wipe all its data** on setup. Never run in CI, and
+  deselected from a plain `pytest`. Never point them at anything you care about.
 - **Live scripts** (`live_test_backup.py`, `live_test_create.py`,
   `live_test_cleanup.py`, `live_test_ssl_verify.py`, `live_test_delete_id.py`):
   manual round-trip verification against a real 2.x instance, driven by

@@ -18,9 +18,12 @@ license. **Import package:** `uptime_kuma_api` (never rename it). **PyPI name:**
   behavior behind `parse_version(self.version)`. (The lowest gate in the code is
   `1.22`, so sub-1.22 servers take the pre-1.22 payload path — 1.21.3 is the
   declared support floor, not the lowest branch.)
-- **Never run `pytest tests/` (bare) against a real Uptime Kuma instance** — the
-  inherited integration tests delete all of its data. Run only the v2 unit
-  files (see CONTRIBUTING.md).
+- **`pytest -m integration` deletes all data on the instance it reaches.** The
+  inherited integration tests wipe every monitor, notification, proxy, tag,
+  status page, docker host, maintenance and API key during setup. `pytest.ini`
+  deselects them by default, so a bare `pytest` is safe — but never opt in
+  against an instance you care about. Use `./run_tests.sh`, which creates and
+  destroys its own containers.
 - **Don't add public API surface casually.** New parameters are additive and
   optional; new public classes must be exported in `__init__.py` and added to
   `docs/api.rst`.
@@ -40,12 +43,15 @@ license. **Import package:** `uptime_kuma_api` (never rename it). **PyPI name:**
 Unit tests (what CI runs):
 
 ```
-pytest tests/test_monitor_types_v2.py tests/test_monitor_params_v2.py \
-       tests/test_status_page_v2.py tests/test_notification_v2.py \
-       tests/test_logger.py tests/test_monitor_builder.py \
-       tests/test_status_page_incidents.py \
-       tests/test_delete_id_coercion_v2.py \
-       tests/test_monitor_cache_v2.py -v
+pytest -v
+```
+
+No file list: `tests/conftest.py` derives an `integration` marker from the
+`UptimeKumaTestCase` base class and `pytest.ini` deselects it, so a bare `pytest`
+is the unit suite. Adding a test file needs no CI or docs change.
+
+```
+python scripts/check_sdist.py    # sdist contents (also gated in publish.yml)
 ```
 
 See `CONTRIBUTING.md` for full setup and `.kiro/steering/` for detailed
