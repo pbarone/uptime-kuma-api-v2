@@ -1,0 +1,54 @@
+# sdist contents.
+#
+# Without this file the sdist file list is setuptools' default, whose only
+# tests/ pattern is `tests/test*.py` (see `_add_defaults_optional` in
+# setuptools/_distutils/command/sdist.py). That pattern ships the 29
+# tests/test_*.py files but matches neither `tests/uptime_kuma_test_case.py` --
+# the base class every inherited integration test extends, without which none
+# of those 29 files can be imported from the sdist -- nor CHANGELOG.md, which
+# `project_urls` advertises.
+
+include CHANGELOG.md
+include tests/uptime_kuma_test_case.py
+
+# DO NOT broaden the two lines above into `recursive-include tests ...` or
+# `graft tests`.
+#
+# That same `tests/test*.py` default is the only reason `tests/.env`,
+# `tests/.backups/**` (config snapshots containing credentials) and
+# `tests/live_test_*.py` are absent from the published sdist: none of those
+# names begins with "test". That is a coincidence of spelling, not a policy. A
+# broad include here sweeps real credentials into a published artifact, and a
+# file published to PyPI cannot be withdrawn.
+#
+# The exclusions below are the structural backstop for that, and they are NOT
+# redundant. `manifest_maker.run` calls `add_defaults()` -- which reads any
+# existing `*.egg-info/SOURCES.txt` back into the file list -- BEFORE
+# `read_template()` processes this file. So these directives are applied on top
+# of whatever a stale SOURCES.txt dragged in, and strip it. Measured: with a
+# SOURCES.txt poisoned by a previous `graft tests` build, a build carrying only
+# the two `include` lines shipped `tests/.env` and three credential-bearing
+# `tests/.backups/config_snapshot_*.json` files; with these lines present, all
+# four were gone.
+#
+# `global-exclude` rather than `exclude` so each pattern holds anywhere in the
+# tree -- there is a credential-bearing `.env` at the repository root as well as
+# under tests/.
+global-exclude .env
+global-exclude .live_test_ids.json
+global-exclude live_test_*.py
+global-exclude *.pyc
+prune tests/.backups
+
+# EXPECTED on a clean build: setuptools prints
+#   warning: no previously-included files matching '.env' found anywhere in distribution
+# once per pattern above. That is the healthy state -- it means the guard found
+# nothing to remove. A build where those warnings are ABSENT is one where a
+# pattern actually fired, which means something tried to ship a file it should
+# not have. Do not "fix" the warnings by deleting the patterns.
+#
+# Exact sdist contents are enforced separately by `scripts/check_sdist.py`,
+# which allowlists tests/ and so also catches residue these patterns do not name
+# (stray `__pycache__` entries, `tests/.env.example`). The division is
+# deliberate: this file prevents a credential leak structurally, that script
+# enforces the precise contents.

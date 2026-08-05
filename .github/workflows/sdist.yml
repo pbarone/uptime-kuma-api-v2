@@ -1,0 +1,45 @@
+name: sdist
+
+# publish.yml runs this same check immediately before uploading, which is what
+# actually prevents a credential leak reaching PyPI. This workflow exists to
+# catch the same mistake at PR time instead, because the release-time failure
+# happens *after* the v* tag is pushed -- and `protect-release-tags` blocks
+# `deletion` on those, so a tag cannot be moved or reused. Failing here costs a
+# push; failing there costs a burned version number.
+#
+# Deliberately its own file rather than a job in test.yml: that workflow is
+# slated to be converted to `workflow_call`, and its six `full (3.x)` checks are
+# required by name in `protect-main`. Keeping this separate means neither change
+# has to touch the other.
+#
+# NOTE: this check is advisory until someone adds it to protect-main's required
+# status checks. Doing so is a deliberate choice with the usual coupling: the
+# required-check name must match the job name below.
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contents:
+    name: contents
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Check sdist contents
+        run: python scripts/check_sdist.py
