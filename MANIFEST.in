@@ -17,12 +17,38 @@ include tests/uptime_kuma_test_case.py
 # That same `tests/test*.py` default is the only reason `tests/.env`,
 # `tests/.backups/**` (config snapshots containing credentials) and
 # `tests/live_test_*.py` are absent from the published sdist: none of those
-# names begin with "test". That is a coincidence of spelling, not a policy. A
+# names begins with "test". That is a coincidence of spelling, not a policy. A
 # broad include here sweeps real credentials into a published artifact, and a
 # file published to PyPI cannot be withdrawn.
 #
-# Enforced by `scripts/check_sdist.py`, which allowlists the tests/ members of
-# a freshly built sdist and fails on anything else. Explicit `global-exclude`
-# lines were tried here instead and removed: matching nothing, they made
-# setuptools warn on every single build, and a build that always warns is a
-# build whose warnings stop being read.
+# The exclusions below are the structural backstop for that, and they are NOT
+# redundant. `manifest_maker.run` calls `add_defaults()` -- which reads any
+# existing `*.egg-info/SOURCES.txt` back into the file list -- BEFORE
+# `read_template()` processes this file. So these directives are applied on top
+# of whatever a stale SOURCES.txt dragged in, and strip it. Measured: with a
+# SOURCES.txt poisoned by a previous `graft tests` build, a build carrying only
+# the two `include` lines shipped `tests/.env` and three credential-bearing
+# `tests/.backups/config_snapshot_*.json` files; with these lines present, all
+# four were gone.
+#
+# `global-exclude` rather than `exclude` so each pattern holds anywhere in the
+# tree -- there is a credential-bearing `.env` at the repository root as well as
+# under tests/.
+global-exclude .env
+global-exclude .live_test_ids.json
+global-exclude live_test_*.py
+global-exclude *.pyc
+prune tests/.backups
+
+# EXPECTED on a clean build: setuptools prints
+#   warning: no previously-included files matching '.env' found anywhere in distribution
+# once per pattern above. That is the healthy state -- it means the guard found
+# nothing to remove. A build where those warnings are ABSENT is one where a
+# pattern actually fired, which means something tried to ship a file it should
+# not have. Do not "fix" the warnings by deleting the patterns.
+#
+# Exact sdist contents are enforced separately by `scripts/check_sdist.py`,
+# which allowlists tests/ and so also catches residue these patterns do not name
+# (stray `__pycache__` entries, `tests/.env.example`). The division is
+# deliberate: this file prevents a credential leak structurally, that script
+# enforces the precise contents.

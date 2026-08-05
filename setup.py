@@ -1,14 +1,16 @@
 from setuptools import setup
 from codecs import open
 import os
-import sys
 
-# "setup.py publish" shortcut.
-if sys.argv[-1] == "publish":
-    os.system("rm dist/*")
-    os.system("python setup.py sdist")
-    os.system("twine upload dist/*")
-    sys.exit()
+# An inherited `setup.py publish` shortcut was removed here. It ran
+# `rm dist/*`, `python setup.py sdist` and `twine upload dist/*`, which uploaded
+# a locally built artifact straight to PyPI -- bypassing the tag/__version__
+# check, `twine check`, and `scripts/check_sdist.py`. That made it the one path
+# by which a stale `*.egg-info/SOURCES.txt` could publish `tests/.env` and the
+# credential-bearing `tests/.backups/**` snapshots, since a local build reads
+# that stale manifest while CI's fresh checkout cannot. It was also broken on
+# Windows (`rm`). Releases go through the tag-triggered publish workflow, which
+# is gated; see the release flow in CONTRIBUTING.md.
 
 info = {}
 here = os.path.abspath(os.path.dirname(__file__))

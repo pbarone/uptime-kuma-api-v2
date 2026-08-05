@@ -51,12 +51,26 @@ published artifact. `publish.yml` runs it against `dist/*.tar.gz` between
 `twine check` and `twine upload`, so a release is already gated on it; run it by
 hand only when changing `MANIFEST.in`.
 
-**A local `python -m build` is not trustworthy on its own here.**
-`manifest_maker` reads an existing `*.egg-info/SOURCES.txt` back into the file
-list, so a tree that built once with a broad `MANIFEST.in` pattern keeps
-shipping those files after the pattern is reverted — reproduced at 111 members
-including `tests/.env`. CI is immune (fresh checkout); this workstation is not.
-`check_sdist.py` deletes the egg-info before building for exactly that reason.
+**A local `python -m build` can inherit stale state.** `manifest_maker.run`
+calls `add_defaults()` — which reads an existing `*.egg-info/SOURCES.txt` back
+into the file list — *before* `read_template()` processes `MANIFEST.in`. So a
+tree that built once with a broad pattern keeps shipping those files after the
+pattern is reverted: reproduced at 111 members including `tests/.env`. CI is
+immune (fresh checkout); this workstation is not. Two things contain it, and the
+distinction matters:
+
+- The `global-exclude` / `prune` lines in `MANIFEST.in` run *after* that
+  read-back and strip it, so **no credential can reach an sdist by this route** —
+  the same poisoned tree drops from 111 members to 61 with zero credentials.
+  They are load-bearing, not decorative. The five `no previously-included files
+  matching` warnings on a clean build are the healthy state; do not delete the
+  patterns to silence them. Their one limit: `MANIFEST.in` applies in file order,
+  so a broad include appended *below* them defeats them.
+- `check_sdist.py` deletes the egg-info before building, and its allowlist
+  rejects any residue regardless of route.
+
+If a local build looks wrong, delete `*.egg-info` and rebuild before debugging
+anything else.
 
 Build docs locally:
 
