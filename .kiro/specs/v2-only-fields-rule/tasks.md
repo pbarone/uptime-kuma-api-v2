@@ -77,7 +77,7 @@ condition the properties are red against.
 
 ## Phase 2 — the inert pieces
 
-- [ ] 4. Add the `UnsupportedFieldWarning` category
+- [x] 4. Add the `UnsupportedFieldWarning` category
   - `class UnsupportedFieldWarning(UserWarning)` in
     `uptime_kuma_api/exceptions.py`, beside `UptimeKumaException` and `Timeout`
   - `UserWarning`, not `RuntimeWarning` (this reports something the *caller* did)
@@ -94,7 +94,7 @@ condition the properties are red against.
   - This is the change's **only** new public name
   - _Requirements: 2.9, 6.9, 6.10_
 
-- [ ] 5. Add the Field_Registry data
+- [x] 5. Add the Field_Registry data
   - `from collections import namedtuple` and
     `_FieldRule = namedtuple("_FieldRule", ("floor", "types", "behaviour"))` at
     module scope in `api.py`, beside `_V2_ONLY_MONITOR_TYPES`
@@ -111,7 +111,7 @@ condition the properties are red against.
     edit, and the field then reaches the payload unconditionally
   - _Requirements: 4.1, 4.3, 4.4, 4.6, 4.8, 7.2_
 
-- [ ] 6. Add the two private helpers
+- [x] 6. Add the two private helpers
   - `_withheld_v2_fields(self, supplied, type_=None) -> list[str]` — iterate the
     registry in declaration order, skip `_RAISE` entries, skip entries whose type
     set excludes `type_`, skip entries whose type set is non-`None` when `type_`

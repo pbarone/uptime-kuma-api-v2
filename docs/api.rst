@@ -91,9 +91,11 @@ tables the library validates against.
          ... }
 
 
-Exceptions
-----------
+Exceptions and warnings
+-----------------------
 
 .. autoexception:: UptimeKumaException
 
 .. autoexception:: Timeout
+
+.. autoexception:: UnsupportedFieldWarning
