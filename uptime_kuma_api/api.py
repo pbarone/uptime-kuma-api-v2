@@ -775,17 +775,45 @@ class UptimeKumaApi(object):
         """
         Parses the server version reported by :attr:`version` for version gating.
 
-        Some builds report a non-PEP440 version string (for example a nightly
-        build like ``2.0.0-dev-nightly-20240101``). Such a version is treated as
-        the newest possible version instead of raising, so version-gated code
-        paths keep working against these servers.
+        Only the *release segment* of the reported version is compared, so a
+        pre-release is gated as the release it belongs to. Uptime Kuma ships
+        betas and reports the tag verbatim, and under PEP 440 a pre-release
+        sorts below its own release, so ``2.0.0-beta.4`` would otherwise be
+        treated as 1.x by every gate in this library. ``2.0.0b1``, ``2.0.0rc1``,
+        ``2.0.0.dev1`` and ``2.0.0`` therefore all evaluate alike against a
+        ``2.0`` floor.
 
-        :return: The parsed server version, or a max sentinel if it is unparseable.
+        This is a deliberate posture rather than a neutral correction, and it
+        errs on the side of assuming a feature is present: ``2.0.0.dev1`` is a
+        build from *before* 2.0 was finished and may genuinely lack a 2.0 field,
+        yet it is gated as 2.0. That matches the optimism already applied to an
+        unparseable version below, and it fails in the same direction. The
+        alternative — flooring each gate at the specific pre-release that first
+        carried the feature — is more precise and requires knowing which beta
+        introduced every gated field, per gate.
+
+        A version that cannot be parsed at all (for example a nightly build like
+        ``2.0.0-dev-nightly-20240101``, or a missing version reported as ``None``
+        or an empty string) is treated as the newest possible version instead of
+        raising, so version-gated code paths keep working against such servers.
+        Note the asymmetry this leaves in place: an unparseable string is treated
+        as newest, while a parseable pre-release is gated as its own release.
+
+        :attr:`version` is unaffected and still returns the raw string the server
+        reported; the normalisation here is private to version gating.
+
+        :return: The release segment of the server version, or a max sentinel if
+                 the version is missing or unparseable.
         :rtype: Version
         """
         try:
-            return parse_version(self.version)
-        except InvalidVersion:
+            # base_version drops the pre/dev/post/local parts, keeping epoch and
+            # release. Compared as a Version rather than a raw release tuple,
+            # because tuples do not zero-pad: (2, 0) >= (2, 0, 0) is False, so a
+            # server reporting "2.0" would fail a "2.0.0" floor.
+            return parse_version(parse_version(self.version).base_version)
+        except (InvalidVersion, TypeError):
+            # TypeError covers a None version, which InvalidVersion does not.
             return parse_version("9999")  # treat unparseable as newest
 
     def _check_conditions_supported(self, conditions) -> None:
