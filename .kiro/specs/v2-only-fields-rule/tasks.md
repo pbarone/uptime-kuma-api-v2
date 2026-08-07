@@ -24,7 +24,7 @@ condition the properties are red against.
 
 ## Phase 1 — Verification_Run (requirement 7), before any registry is built
 
-- [ ] 1. Write the v1 verification script
+- [x] 1. Write the v1 verification script
   - New `tests/live_test_v2_only_fields_v1.py`, modelled on the existing
     `tests/live_test_conditions_v1.py` and sharing its safety posture
   - Read its own `UPTIME_KUMA_V1_URL` / `UPTIME_KUMA_V1_USERNAME` /
@@ -44,7 +44,7 @@ condition the properties are red against.
     cleanup cycle; it is a standalone one-off
   - _Requirements: 7.1, 7.4, 7.5, 7.6, 7.7, 7.8_
 
-- [ ] 2. Run it against a disposable 1.23.x container and record the results
+- [x] 2. Run it against a disposable 1.23.x container and record the results
   - **Manual step, needs the Docker host over SSH** — this workstation has no
     Docker. Read `DOCKER-HOST` / `DOCKER-USER` from the gitignored root `.env`;
     never write either into a tracked file
@@ -58,7 +58,7 @@ condition the properties are red against.
     and `<user>`
   - _Requirements: 7.1, 7.9, 7.10_
 
-- [ ] 3. Check how the companion Ansible collection handles unexpected stderr
+- [x] 3. Check how the companion Ansible collection handles unexpected stderr
   - `warnings.warn` writes to stderr via `warnings.showwarning`, and the
     collection wraps these calls in a module process
   - Record the observed behaviour in the same results file, beside the verdict
