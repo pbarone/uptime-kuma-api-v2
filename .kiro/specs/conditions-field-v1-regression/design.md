@@ -298,6 +298,33 @@ Recommendation: bring `jsonPathOperator`, `snmp_v3_username`, `ping_count`,
   type is itself v2-only, so a v1 server rejects the monitor type before the
   field matters. Gate it for uniformity, expect no behavioural change.
 
+### Outcome: the raise was retained, and the inconsistency was closed the other way
+
+**Resolved by `.kiro/specs/v2-only-fields-rule/` (issue #14), which landed.** The
+`conditions` raise is **kept**, as the single named exception to a rule that now
+covers the whole class. The other 25 v2-only monitor fields are still withheld and
+still do not raise, but the omission is no longer silent: each withheld field is
+reported by one `UnsupportedFieldWarning` per call.
+
+So the "inconsistent by design" cost recorded below was paid down without retiring
+the raise, and the severity argument in this section is what justified keeping it.
+That argument is now written down as an executable test rather than prose — *a
+field that changes the monitor's verdict raises; a field that changes how the check
+runs is withheld with a Signal* — and a test asserts that exactly one registry
+entry has the raising behaviour, so a second exception has to fail a test rather
+than win an argument.
+
+One premise of this section was also settled empirically and no longer needs to be
+hedged. The recommendation for the seven adjacent fields rested partly on their v1
+behaviour being **unverified**, so that raising "would convert an unverified,
+possibly-working path into a guaranteed hard error". That unknown is closed: a real
+1.23.2 server rejects all 25 reachable fields with `table monitor has no column
+named ...`, so there was never a possibly-working path
+(`.kiro/specs/v2-only-fields-rule/v1-verification-results.md`). It does not change
+the conclusion — a caller who supplies such a field today still gets a working
+monitor, because the library withholds it before building the payload, so raising
+would still take a working call away.
+
 ### The option the requirements did not consider
 
 There is a third position, and it is arguably the better long-term

@@ -5,6 +5,8 @@ import json
 import random
 import string
 import time
+import warnings
+from collections import namedtuple
 from contextlib import contextmanager
 from copy import deepcopy
 from typing import Any
@@ -24,6 +26,7 @@ from . import (
     NotificationType,
     ProxyProtocol,
     Timeout,
+    UnsupportedFieldWarning,
     UptimeKumaException,
     notification_provider_conditions,
     notification_provider_options
@@ -51,6 +54,90 @@ _V2_ONLY_MONITOR_TYPES = frozenset({
     MonitorType.SMTP,
     MonitorType.SYSTEM_SERVICE,
 })
+
+
+# What happens to a caller-supplied monitor field the connected server is too old
+# to accept. Withholding is the rule; raising is reserved for a field whose loss
+# would change the monitor's verdict rather than how the check runs.
+_WITHHOLD = "withhold"
+_RAISE = "raise"
+
+#: One row of _V2_ONLY_MONITOR_FIELDS.
+#:
+#: floor      -- lowest server version implementing the field, as a string, parsed
+#:               with parse_version at comparison time. Kept as a string because
+#:               the warning message quotes it verbatim.
+#: types      -- frozenset of MonitorType members the field applies to, or None for
+#:               no restriction. None rather than an empty frozenset: an empty set
+#:               is a valid value meaning "no type qualifies", so a typo producing
+#:               one would omit the field everywhere, at every version, silently.
+#: behaviour  -- _WITHHOLD or _RAISE.
+_FieldRule = namedtuple("_FieldRule", ("floor", "types", "behaviour"))
+
+# The monitor types that accept ipFamily. Spans both majors, so ipFamily stays
+# reachable on a pre-2.0 server even though four of these types do not.
+_IP_FAMILY_TYPES = frozenset({
+    MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
+    MonitorType.PING, MonitorType.PORT, MonitorType.DNS,
+    MonitorType.STEAM, MonitorType.MQTT, MonitorType.RADIUS,
+    MonitorType.TAILSCALE_PING, MonitorType.GRPC_KEYWORD,
+    MonitorType.SNMP, MonitorType.SMTP, MonitorType.RABBITMQ,
+})
+
+# The monitor types that accept the v2-only HTTP fields.
+_HTTP_V2_TYPES = frozenset({
+    MonitorType.HTTP, MonitorType.KEYWORD,
+    MonitorType.JSON_QUERY, MonitorType.REAL_BROWSER,
+})
+
+# Monitor fields Uptime Kuma only accepts from the stated version onward, and the
+# single source of truth for which those are. A caller-supplied value below the
+# floor is withheld from the payload and reported once per call as an
+# UnsupportedFieldWarning; `conditions` alone raises, because it changes the
+# monitor's up/down verdict rather than how the check runs. The rule, including
+# that test, is stated for callers in docs/api.rst under
+# "Version-gated monitor fields".
+#
+# Every floor was verified against a real 1.23.2 server rather than assumed: all
+# 25 reachable fields are rejected with "table monitor has no column named ...",
+# so none of them is mis-gated. Evidence:
+# .kiro/specs/v2-only-fields-rule/v1-verification-results.md
+#
+# Declaration order is the order withheld fields appear in the warning message.
+# Keep it stable: the message text is part of the warnings module's duplicate-
+# suppression key, so reordering changes which warnings are shown.
+_V2_ONLY_MONITOR_FIELDS = {
+    "conditions": _FieldRule("2.0", None, _RAISE),
+
+    "ipFamily": _FieldRule("2.0", _IP_FAMILY_TYPES, _WITHHOLD),
+
+    "cacheBust": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "retryOnlyOnStatusCodeFailure": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "bearer_token": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "oauth_audience": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "domainExpiryNotification": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "saveResponse": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "saveErrorResponse": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "responseMaxLength": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "responsecheck": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+
+    "subtype": _FieldRule("2.0", None, _WITHHOLD),
+    "wsSubprotocol": _FieldRule("2.0", None, _WITHHOLD),
+    "wsIgnoreSecWebsocketAcceptHeader": _FieldRule("2.0", None, _WITHHOLD),
+    "remoteBrowsersToggle": _FieldRule("2.0", None, _WITHHOLD),
+    "remote_browser": _FieldRule("2.0", None, _WITHHOLD),
+    "screenshot_delay": _FieldRule("2.0", None, _WITHHOLD),
+    "gamedigToken": _FieldRule("2.0", None, _WITHHOLD),
+    "protocol": _FieldRule("2.0", None, _WITHHOLD),
+
+    "jsonPathOperator": _FieldRule("2.0", frozenset({MonitorType.JSON_QUERY}), _WITHHOLD),
+    "snmp_v3_username": _FieldRule("2.0", frozenset({MonitorType.SNMP}), _WITHHOLD),
+    "ping_count": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
+    "ping_numeric": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
+    "ping_per_request_timeout": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
+    "mqttWebsocketPath": _FieldRule("2.0", frozenset({MonitorType.MQTT}), _WITHHOLD),
+    "mqttCheckType": _FieldRule("2.0", frozenset({MonitorType.MQTT}), _WITHHOLD),
+}
 
 
 def int_to_bool(data, keys) -> None:
@@ -863,6 +950,81 @@ class UptimeKumaApi(object):
                 f"2.0 or newer, but the server reports version {self.version}"
             )
 
+    def _withheld_v2_fields(self, supplied, type_=None) -> list:
+        """
+        Names the version-gated monitor fields this call cannot send.
+
+        Iterates :data:`_V2_ONLY_MONITOR_FIELDS` in declaration order, so the
+        returned order -- and therefore the warning message, and the duplicate-
+        suppression key the warnings module derives from it -- is stable. Neither
+        ``supplied`` order nor set iteration order is used: the first varies by
+        caller and the second by interpreter run, and either would make the same
+        call produce two different messages.
+
+        ``_RAISE`` entries are skipped, so a field whose rule is to raise never
+        appears in a warning. By the time this runs, such a field has either
+        already raised in the validation preamble or was never a request.
+
+        :param dict supplied: Caller-supplied values keyed by parameter name. A key
+                              mapped to None counts as not supplied.
+        :param type_: The monitor type, when the caller named one. When it is
+                      None -- the ``edit_monitor`` path, which names no type --
+                      the *type restriction* is not applied but the version
+                      comparison still is. Skipping the whole entry instead would
+                      leave every type-restricted field ungated on that path, so
+                      ``edit_monitor(id_, bearer_token=...)`` would still send a
+                      column a 1.x server has no room for. Not applying the
+                      restriction costs nothing on 2.x, where such a field is at
+                      or above its floor and is never withheld anyway.
+        :return: The withheld field names, in registry declaration order.
+        :rtype: list
+        """
+        parsed = self._parsed_version()
+        withheld = []
+        for name, rule in _V2_ONLY_MONITOR_FIELDS.items():
+            if rule.behaviour == _RAISE:
+                continue
+            if supplied.get(name) is None:
+                continue
+            if rule.types is not None and type_ is not None \
+                    and type_ not in rule.types:
+                continue
+            if parsed < parse_version(rule.floor):
+                withheld.append(name)
+        return withheld
+
+    def _warn_withheld_v2_fields(self, withheld, stacklevel) -> None:
+        """
+        Reports withheld fields once, as a single :class:`UnsupportedFieldWarning`.
+
+        One warning per call rather than one per field, so a call withholding six
+        fields is one notification and not six.
+
+        :param list withheld: Field names from :meth:`_withheld_v2_fields`.
+        :param int stacklevel: How many frames to skip so the warning blames the
+                               caller's line rather than this library's. 4 from
+                               ``_build_monitor_data`` (here, the builder,
+                               ``add_monitor``, the caller) and 3 from
+                               ``edit_monitor`` (here, that method, the caller).
+        :raises UnsupportedFieldWarning: If the caller has escalated the category
+                                         with ``warnings.simplefilter("error", ...)``.
+        """
+        if not withheld:
+            return
+        version = self.version
+        detail = ", ".join(
+            f"{name} (requires {_V2_ONLY_MONITOR_FIELDS[name].floor} or newer)"
+            for name in withheld
+        )
+        plural = "s" if len(withheld) > 1 else ""
+        warnings.warn(
+            f"the server reports version {version}, which does not support "
+            f"{len(withheld)} requested monitor field{plural}, so "
+            f"{'they were' if plural else 'it was'} not sent: {detail}",
+            UnsupportedFieldWarning,
+            stacklevel=stacklevel,
+        )
+
     def _build_monitor_data(
             self,
             type: MonitorType,
@@ -1222,8 +1384,7 @@ class UptimeKumaApi(object):
                 "jsonPath": jsonPath,
                 "expectedValue": expectedValue,
             })
-            if jsonPathOperator is not None and self._parsed_version() >= parse_version("2.0"):
-                data["jsonPathOperator"] = jsonPathOperator
+            # jsonPathOperator is version-gated by the registry pass below.
 
         # KAFKA_PRODUCER
         if type == MonitorType.KAFKA_PRODUCER:
@@ -1257,8 +1418,7 @@ class UptimeKumaApi(object):
                 "snmpOid": snmpOid,
                 "snmpVersion": snmpVersion,
             })
-            if snmp_v3_username is not None and self._parsed_version() >= parse_version("2.0"):
-                data["snmp_v3_username"] = snmp_v3_username
+            # snmp_v3_username is version-gated by the registry pass below.
 
         # SMTP (monitor type)
         if type == MonitorType.SMTP:
@@ -1272,69 +1432,42 @@ class UptimeKumaApi(object):
                 "system_service_name": system_service_name,
             })
 
-        # PING-specific params
-        if type == MonitorType.PING:
-            if self._parsed_version() >= parse_version("2.0"):
-                if ping_count is not None:
-                    data["ping_count"] = ping_count
-                if ping_numeric is not None:
-                    data["ping_numeric"] = ping_numeric
-                if ping_per_request_timeout is not None:
-                    data["ping_per_request_timeout"] = ping_per_request_timeout
-
-        # MQTT new params
-        if type == MonitorType.MQTT:
-            if self._parsed_version() >= parse_version("2.0"):
-                if mqttWebsocketPath is not None:
-                    data["mqttWebsocketPath"] = mqttWebsocketPath
-                if mqttCheckType is not None:
-                    data["mqttCheckType"] = mqttCheckType
-
-        # v2-only parameters (gated behind version check)
-        if self._parsed_version() >= parse_version("2.0"):
+        # conditions keeps its own emission line rather than going through the
+        # pass below: the caller's list must reach the payload as the same object,
+        # and None must become []. No other field has a value rule, so encoding
+        # this one as a per-entry coercion would add a third dimension to
+        # _FieldRule used exactly once.
+        if self._parsed_version() >= parse_version(
+                _V2_ONLY_MONITOR_FIELDS["conditions"].floor):
             data["conditions"] = conditions if conditions is not None else []
 
-            # Network monitors: ipFamily
-            network_types = [
-                MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
-                MonitorType.PING, MonitorType.PORT, MonitorType.DNS,
-                MonitorType.STEAM, MonitorType.MQTT, MonitorType.RADIUS,
-                MonitorType.TAILSCALE_PING, MonitorType.GRPC_KEYWORD,
-                MonitorType.SNMP, MonitorType.SMTP, MonitorType.RABBITMQ,
-            ]
-            if type in network_types and ipFamily is not None:
-                data["ipFamily"] = ipFamily
+        # Every other version-gated monitor field, emitted from the registry in
+        # one pass. A field the server is too old for is withheld and reported
+        # once, together, by the single warning at the end.
+        #
+        # locals() is read once here rather than spelling out 25 "name": name
+        # pairs. That is deliberate: a mistyped pair would yield None, the pass
+        # reads None as "not supplied", and the field would be neither emitted nor
+        # reported -- a silent hole. test_every_registry_key_is_a_build_monitor_data_parameter
+        # is what makes a wrong key fail instead.
+        local_values = locals()
+        supplied = {name: local_values.get(name)
+                    for name in _V2_ONLY_MONITOR_FIELDS}
 
-            # HTTP params (v2-only)
-            http_types = [MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY, MonitorType.REAL_BROWSER]
-            if type in http_types:
-                for field, value in [
-                    ("cacheBust", cacheBust),
-                    ("retryOnlyOnStatusCodeFailure", retryOnlyOnStatusCodeFailure),
-                    ("bearer_token", bearer_token),
-                    ("oauth_audience", oauth_audience),
-                    ("domainExpiryNotification", domainExpiryNotification),
-                    ("saveResponse", saveResponse),
-                    ("saveErrorResponse", saveErrorResponse),
-                    ("responseMaxLength", responseMaxLength),
-                    ("responsecheck", responsecheck),
-                ]:
-                    if value is not None:
-                        data[field] = value
+        withheld = self._withheld_v2_fields(supplied, type)
+        for name, rule in _V2_ONLY_MONITOR_FIELDS.items():
+            if rule.behaviour == _RAISE or name in withheld:
+                continue
+            value = supplied[name]
+            if value is None:
+                continue
+            if rule.types is not None and type not in rule.types:
+                continue
+            data[name] = value
 
-            # Low-priority params (v2-only, not type-gated)
-            for field, value in [
-                ("subtype", subtype),
-                ("wsSubprotocol", wsSubprotocol),
-                ("wsIgnoreSecWebsocketAcceptHeader", wsIgnoreSecWebsocketAcceptHeader),
-                ("remoteBrowsersToggle", remoteBrowsersToggle),
-                ("remote_browser", remote_browser),
-                ("screenshot_delay", screenshot_delay),
-                ("gamedigToken", gamedigToken),
-                ("protocol", protocol),
-            ]:
-                if value is not None:
-                    data[field] = value
+        # stacklevel 4: this method, add_monitor, the caller. The helper adds one
+        # more frame of its own.
+        self._warn_withheld_v2_fields(withheld, stacklevel=4)
 
         return data
 
@@ -1843,6 +1976,12 @@ class UptimeKumaApi(object):
         """
         Adds a new monitor.
 
+        Some monitor fields only exist from a certain Uptime Kuma version onward.
+        If you supply one the connected server does not implement, it is left out
+        of the payload and reported once with an :class:`UnsupportedFieldWarning`.
+        See :ref:`v2-only-fields` for the rule, including the one field that
+        raises instead and how to make the warning raise if you prefer.
+
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
@@ -1870,6 +2009,13 @@ class UptimeKumaApi(object):
         """
         Edits an existing monitor.
 
+        Some monitor fields only exist from a certain Uptime Kuma version onward.
+        If you supply one the connected server does not implement, it is left out
+        of the payload and reported once with an :class:`UnsupportedFieldWarning`.
+        A value the server itself returned is never treated as a request, so
+        editing an unrelated field cannot drop it. See :ref:`v2-only-fields` for
+        the rule.
+
         :param int id_: The monitor id.
         :return: The server response.
         :rtype: dict
@@ -1890,8 +2036,28 @@ class UptimeKumaApi(object):
         # explicitly asked for, so editing an unrelated field on a monitor that
         # already carries a v2-only type cannot raise spuriously.
         self._check_monitor_type_supported(kwargs.get("type"))
+
+        # Decide from kwargs BEFORE the merge, then merge only what survives.
+        #
+        # Deleting keys after the merge would be the wrong shape: del data[key]
+        # cannot tell a key the caller supplied from one getMonitor returned, so a
+        # monitor already carrying a v2-only column would lose it on any unrelated
+        # edit. Computing the withheld set from kwargs keeps the server's own data
+        # untouched.
+        #
+        # No monitor type is passed, so the version comparison applies but the
+        # per-field type restriction does not. edit_monitor names no type, and
+        # enforcing the restriction from a kwargs lookup would drop a field on
+        # every ordinary edit call at every version, 2.x included. Leaving the
+        # restriction off costs nothing there -- a field at or above its floor is
+        # never withheld -- while still keeping a below-floor column off the wire.
+        withheld = self._withheld_v2_fields(kwargs)
+        # stacklevel 3: this method, the caller. The helper adds one more frame.
+        # Warned before get_monitor so an escalated warning costs no round trip.
+        self._warn_withheld_v2_fields(withheld, stacklevel=3)
+
         data = self.get_monitor(id_)
-        data.update(kwargs)
+        data.update({k: v for k, v in kwargs.items() if k not in withheld})
         _convert_monitor_input(data)
         _check_arguments_monitor(data)
         with self.wait_for_event(Event.MONITOR_LIST):

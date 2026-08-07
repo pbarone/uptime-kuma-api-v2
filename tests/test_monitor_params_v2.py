@@ -4,8 +4,11 @@ Unit tests for new monitor parameters in _build_monitor_data.
 These tests mock the API version and call _build_monitor_data directly
 without connecting to a live server.
 """
+import inspect
+import os
 import random
 import unittest
+import warnings
 from unittest.mock import MagicMock
 
 from packaging.version import InvalidVersion, parse as parse_version
@@ -15,9 +18,15 @@ from uptime_kuma_api import (
     AuthMethod,
     Event,
     MonitorBuilder,
+    UnsupportedFieldWarning,
     UptimeKumaException,
 )
-from uptime_kuma_api.api import UptimeKumaApi
+from uptime_kuma_api.api import (
+    UptimeKumaApi,
+    _RAISE,
+    _V2_ONLY_MONITOR_FIELDS,
+    _V2_ONLY_MONITOR_TYPES,
+)
 
 
 class TestMonitorParamsV2(unittest.TestCase):
@@ -28,6 +37,12 @@ class TestMonitorParamsV2(unittest.TestCase):
         self.api.version = "2.4.0"
         # the real version-gate choke point, so gates parse self.version for real
         self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
+        self.api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(self.api)
+        )
+        self.api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(self.api)
+        )
         self.build = UptimeKumaApi._build_monitor_data.__get__(self.api)
 
     def _build_v1(self):
@@ -35,6 +50,12 @@ class TestMonitorParamsV2(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = "1.23.2"
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         return UptimeKumaApi._build_monitor_data.__get__(api)
 
     # ─── 1. jsonPathOperator ──────────────────────────────────────────
@@ -1365,6 +1386,12 @@ class TestConditionsV1Gate(unittest.TestCase):
         self.api.version = "2.4.0"
         # the real version-gate choke point, so gates parse self.version for real
         self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
+        self.api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(self.api)
+        )
+        self.api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(self.api)
+        )
         # the real guard too -- a spec'd MagicMock would otherwise stub it out
         # and the version rejection would never run
         self.api._check_conditions_supported = (
@@ -1377,6 +1404,12 @@ class TestConditionsV1Gate(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = V1_VERSION
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         api._check_conditions_supported = (
             UptimeKumaApi._check_conditions_supported.__get__(api)
         )
@@ -1645,6 +1678,12 @@ class TestConditionsPreservation(unittest.TestCase):
         self.api = MagicMock(spec=UptimeKumaApi)
         self.api.version = "2.4.0"
         self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
+        self.api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(self.api)
+        )
+        self.api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(self.api)
+        )
         # bind the real guard as well, otherwise the spec'd MagicMock stubs it
         # and the TypeError-ordering proof below would never reach it
         self.api._check_conditions_supported = (
@@ -1657,6 +1696,12 @@ class TestConditionsPreservation(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = version
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         api._check_conditions_supported = (
             UptimeKumaApi._check_conditions_supported.__get__(api)
         )
@@ -1964,14 +2009,17 @@ ADJACENT_V2_FIELDS = [
 class TestAdjacentV2FieldsPreservation(unittest.TestCase):
     """The seven adjacent v2-only fields are gated without new errors.
 
-    Property 6. These fields sit in type-specific blocks outside the ``>= 2.0``
-    block and are explicit-opt-in only, so the ratified policy for them is
-    **silent omission on v1, no raise** -- unlike ``conditions``, which raises.
+    Originally Property 6, written when the ratified policy for these seven was
+    *silent* omission on v1. **That policy was narrowed by issue #14**: they are
+    still omitted and still do not raise, but the omission is now announced with
+    an :class:`UnsupportedFieldWarning`, one per call. The class is kept because
+    its no-raise assertions are exactly what must survive that change -- a
+    warning is not a raise, and these seven must never become the raising kind.
 
     The absence of a raise is asserted explicitly rather than left implicit, so a
     later change that starts raising for one of these fails a test instead of
     passing unnoticed. That negative assertion is the executable form of the
-    policy decision.
+    policy decision, and it outlived the policy's silent half.
     """
 
     def _api_for(self, version):
@@ -1979,6 +2027,12 @@ class TestAdjacentV2FieldsPreservation(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = version
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         # MagicMock(spec=...) auto-stubs the guard, so bind the real one too --
         # otherwise a stubbed no-op would hide a misplaced conditions check
         api._check_conditions_supported = (
@@ -2025,8 +2079,13 @@ class TestAdjacentV2FieldsPreservation(unittest.TestCase):
 
         Deliberately catches bare ``Exception`` and fails with the field name:
         the point is that *no* error of any kind appears here, not merely that
-        ``UptimeKumaException`` does not. Silent omission is the ratified policy
-        for these seven, and this is where a future raise would be caught.
+        ``UptimeKumaException`` does not. Withholding these seven -- now with a
+        warning, per issue #14 -- must never become raising, and this is where a
+        future raise would be caught.
+
+        The warning is suppressed rather than asserted here so the assertion stays
+        exactly "nothing was raised"; the warning itself is asserted in
+        ``test_all_seven_together_on_v1_absent_and_announced``.
 
         **Validates: Requirements 2.6**
         """
@@ -2034,21 +2093,28 @@ class TestAdjacentV2FieldsPreservation(unittest.TestCase):
         for field, value, mtype, base in ADJACENT_V2_FIELDS:
             with self.subTest(field=field, version=V1_VERSION):
                 try:
-                    build(type=mtype, **base, **{field: value})
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UnsupportedFieldWarning)
+                        build(type=mtype, **base, **{field: value})
                 except Exception as exc:  # noqa: BLE001 - the assertion IS "nothing"
                     self.fail(
                         f"{field} on {V1_VERSION} raised "
                         f"{type(exc).__name__}: {exc}"
                     )
 
-    def test_all_seven_together_on_v1_absent_and_silent(self):
-        """All seven at once, per type, are dropped on v1 without raising.
+    def test_all_seven_together_on_v1_absent_and_announced(self):
+        """All seven at once, per type, are dropped on v1 -- announced, not raising.
 
         A per-field loop would miss an interaction between two gates in the same
-        block (the three PING fields and the two MQTT fields share one nested
-        gate each), so the fields are also supplied together here.
+        block (the three PING fields and the two MQTT fields shared one nested
+        gate each before issue #14 moved them into the registry), so the fields
+        are also supplied together here.
 
-        **Validates: Requirements 2.6, 3.5**
+        Renamed from ``..._absent_and_silent``: the omission is no longer silent.
+        One warning per call is asserted here, which is also what proves the seven
+        are reported *together* rather than one warning each.
+
+        **Validates: Requirements 2.1, 2.6, 3.5**
         """
         build = self._build_for(V1_VERSION)
         all_fields = {field: value for field, value, _, _ in ADJACENT_V2_FIELDS}
@@ -2059,7 +2125,9 @@ class TestAdjacentV2FieldsPreservation(unittest.TestCase):
         for mtype, base in by_type.items():
             with self.subTest(type=mtype):
                 try:
-                    result = build(type=mtype, **base, **all_fields)
+                    with warnings.catch_warnings(record=True) as caught:
+                        warnings.simplefilter("always")
+                        result = build(type=mtype, **base, **all_fields)
                 except Exception as exc:  # noqa: BLE001 - the assertion IS "nothing"
                     self.fail(
                         f"all seven on {V1_VERSION} for {mtype} raised "
@@ -2067,6 +2135,14 @@ class TestAdjacentV2FieldsPreservation(unittest.TestCase):
                     )
                 for field in all_fields:
                     self.assertNotIn(field, result)
+
+                relevant = [w for w in caught
+                            if issubclass(w.category, UnsupportedFieldWarning)]
+                self.assertEqual(
+                    len(relevant), 1,
+                    "the withheld fields must be reported in one warning, "
+                    f"got {len(relevant)}",
+                )
 
     # ─── 3. argument validation still fires on both majors ────────────
 
@@ -2305,6 +2381,12 @@ class TestConditionsGeneratedInputs(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = version
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         # MagicMock(spec=...) auto-stubs both of these; bind the real ones or a
         # stubbed no-op guard would silently pass every rejection assertion
         api._check_conditions_supported = (
@@ -2539,6 +2621,12 @@ class TestV2OnlyMonitorTypesV1Gate(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = V1_VERSION
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         api._check_conditions_supported = (
             UptimeKumaApi._check_conditions_supported.__get__(api)
         )
@@ -2709,6 +2797,12 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = version
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
         api._check_conditions_supported = (
             UptimeKumaApi._check_conditions_supported.__get__(api)
         )
@@ -2854,6 +2948,728 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
         self.assertFalse(
             [n for n in public if "V2_ONLY" in n.upper()],
             f"unexpected public export: {public}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# One rule for v2-only monitor fields on a pre-2.0 server (issue #14).
+#
+# A caller-supplied field below its version floor is withheld from the payload
+# and reported once per call as an UnsupportedFieldWarning. `conditions` is the
+# single named exception and still raises, because it changes the monitor's
+# up/down verdict rather than how the check runs.
+# ---------------------------------------------------------------------------
+
+V2_VERSION = "2.4.0"
+FLOOR_VERSION = "2.0"
+
+# Minimal kwargs per monitor type. _build_monitor_data does not enforce the
+# per-type required arguments -- that is _check_arguments_monitor -- so these
+# only need to be enough to reach the emission pass.
+FIELD_TYPE_BASES = {
+    MonitorType.HTTP: {"url": "http://127.0.0.1"},
+    MonitorType.JSON_QUERY: {
+        "url": "http://127.0.0.1", "jsonPath": "$.ok", "expectedValue": "1",
+    },
+    MonitorType.PING: {"hostname": "127.0.0.1"},
+    MonitorType.MQTT: {
+        "hostname": "127.0.0.1", "port": 1883, "mqttTopic": "t",
+    },
+    MonitorType.SNMP: {"hostname": "127.0.0.1", "snmpOid": "1.3.6"},
+}
+
+# A value for every registry field. Three of them are constrained by the
+# validation preamble and must stay valid, because that validation fires on both
+# majors and would otherwise mask what these tests are measuring:
+# responseMaxLength is range-checked, mqttCheckType is an enum of two, and
+# mqttWebsocketPath is length-capped.
+FIELD_SAMPLE_VALUES = {
+    "conditions": SAMPLE_CONDITIONS,
+    "ipFamily": "ipv4",
+    "cacheBust": True,
+    "retryOnlyOnStatusCodeFailure": True,
+    "bearer_token": "tok",
+    "oauth_audience": "aud",
+    "domainExpiryNotification": True,
+    "saveResponse": True,
+    "saveErrorResponse": True,
+    "responseMaxLength": 1000,
+    "responsecheck": "check",
+    "subtype": "sub",
+    "wsSubprotocol": "chat",
+    "wsIgnoreSecWebsocketAcceptHeader": True,
+    "remoteBrowsersToggle": True,
+    "remote_browser": "rb",
+    "screenshot_delay": 5,
+    "gamedigToken": "gd",
+    "protocol": "https",
+    "jsonPathOperator": "==",
+    "snmp_v3_username": "snmpuser",
+    "ping_count": 3,
+    "ping_numeric": True,
+    "ping_per_request_timeout": 5,
+    "mqttWebsocketPath": "/mqtt",
+    "mqttCheckType": "keyword",
+}
+
+# Falsy-but-not-None values. The emission test is `is not None`, so these are
+# supplied values that must be withheld and announced like any other. A
+# truthy-only corpus would leave the whole edge uncovered while every assertion
+# still passed. responseMaxLength is deliberately absent: 0 is rejected by the
+# preamble ValueError before the pass ever runs, on both majors.
+FIELD_FALSY_VALUES = {
+    "saveResponse": False,
+    "cacheBust": False,
+    "responsecheck": "",
+    "screenshot_delay": 0,
+}
+
+
+def _withhold_fields():
+    """Registry field names whose rule is to withhold, in declaration order."""
+    return [n for n, r in _V2_ONLY_MONITOR_FIELDS.items() if r.behaviour != _RAISE]
+
+
+def _applicable_type(name):
+    """A monitor type the named field applies to."""
+    rule = _V2_ONLY_MONITOR_FIELDS[name]
+    if rule.types is None:
+        return MonitorType.HTTP
+    for candidate in (MonitorType.HTTP, MonitorType.JSON_QUERY, MonitorType.PING,
+                      MonitorType.MQTT, MonitorType.SNMP):
+        if candidate in rule.types:
+            return candidate
+    return sorted(rule.types)[0]
+
+
+def _reachable_on_v1(name):
+    """False for a field whose only monitor types are themselves v2-only.
+
+    ``snmp_v3_username`` is the one such field: the 2.3.1 type gate rejects
+    ``SNMP`` before any payload is built, so no caller can reach it on a pre-2.0
+    server and no v1 assertion about it would be meaningful.
+    """
+    rule = _V2_ONLY_MONITOR_FIELDS[name]
+    if rule.types is None:
+        return True
+    return bool(rule.types - _V2_ONLY_MONITOR_TYPES)
+
+
+class _V2FieldsApiMixin:
+    """Builds a mock api with the real gating machinery bound onto it.
+
+    A ``MagicMock(spec=UptimeKumaApi)`` stubs out every attribute it is not told
+    about, so an unbound helper would silently never run and the test would pass
+    vacuously. Everything the pass touches is bound explicitly.
+    """
+
+    def _api(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
+        api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(api)
+        )
+        api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(api)
+        )
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
+        # Bound too, so add_monitor reaches the real builder. Without it
+        # add_monitor would call a stubbed _build_monitor_data, no warning would
+        # be emitted, and the stacklevel assertion would have nothing to inspect.
+        api._build_monitor_data = (
+            UptimeKumaApi._build_monitor_data.__get__(api)
+        )
+        return api
+
+    def _build(self, version):
+        return UptimeKumaApi._build_monitor_data.__get__(self._api(version))
+
+    def _build_field(self, version, name, value=None, type_=None):
+        """Build a payload supplying exactly one registry field."""
+        type_ = type_ if type_ is not None else _applicable_type(name)
+        kwargs = dict(FIELD_TYPE_BASES.get(type_, {}))
+        kwargs["type"] = type_
+        kwargs["name"] = "m"
+        kwargs[name] = FIELD_SAMPLE_VALUES[name] if value is None else value
+        return self._build(version)(**kwargs)
+
+
+class TestV2OnlyFieldsWithheld(_V2FieldsApiMixin, unittest.TestCase):
+    """A supplied v2-only field is absent below its floor and present at or above it.
+
+    Parametrised over the registry rather than a hand-picked sample, so a field
+    added later is covered on arrival instead of needing a new test.
+    """
+
+    def test_every_field_withheld_on_v1(self):
+        """Every withhold-rule field is absent from a pre-2.0 payload.
+
+        **Validates: Requirements 1.1, 1.2, 4.1, 4.2**
+        """
+        for name in _withhold_fields():
+            if not _reachable_on_v1(name):
+                continue
+            with self.subTest(field=name):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UnsupportedFieldWarning)
+                    result = self._build_field(V1_VERSION, name)
+                self.assertNotIn(name, result)
+
+    def test_every_field_present_on_v2(self):
+        """Every registry field reaches a 2.x payload holding the value supplied.
+
+        **Validates: Requirements 6.1**
+        """
+        for name in _withhold_fields():
+            with self.subTest(field=name):
+                result = self._build_field(V2_VERSION, name)
+                self.assertIn(name, result)
+                self.assertEqual(result[name], FIELD_SAMPLE_VALUES[name])
+
+    def test_floor_itself_is_supported(self):
+        """A server reporting exactly the floor implements the field.
+
+        The comparison is ``>=``, not ``>``.
+
+        **Validates: Requirements 5.2**
+        """
+        for name in _withhold_fields():
+            with self.subTest(field=name):
+                result = self._build_field(FLOOR_VERSION, name)
+                self.assertIn(name, result)
+
+    def test_type_restriction_holds_on_both_majors(self):
+        """A type-restricted field is omitted for an out-of-set type at every version.
+
+        The restriction is not a v1 concern: it applies at 2.x too, so a registry
+        keyed on field name alone would emit ``ipFamily`` for a REDIS monitor.
+
+        **Validates: Requirements 4.4, 4.5**
+        """
+        for name in _withhold_fields():
+            rule = _V2_ONLY_MONITOR_FIELDS[name]
+            if rule.types is None:
+                continue
+            if MonitorType.REDIS in rule.types:
+                continue
+            for version in (V1_VERSION, V2_VERSION):
+                with self.subTest(field=name, version=version):
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UnsupportedFieldWarning)
+                        result = self._build_field(
+                            version, name, type_=MonitorType.REDIS
+                        )
+                    self.assertNotIn(name, result)
+
+    def test_withholding_costs_no_supported_field(self):
+        """Withholding one field never drops another the server does support.
+
+        This is the core of the v1 user story: a rule about fields the server does
+        not have must cost the caller none of the fields it does have.
+
+        **Validates: Requirements 9.5**
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UnsupportedFieldWarning)
+            result = self._build(V1_VERSION)(
+                type=MonitorType.HTTP,
+                name="m",
+                url="http://127.0.0.1",
+                interval=120,
+                bearer_token="tok",
+                saveResponse=True,
+            )
+        self.assertNotIn("bearer_token", result)
+        self.assertNotIn("saveResponse", result)
+        self.assertEqual(result["interval"], 120)
+        self.assertEqual(result["url"], "http://127.0.0.1")
+
+    def test_every_registry_key_is_a_build_monitor_data_parameter(self):
+        """Every registry key names a real parameter.
+
+        The pass reads the caller's values out of ``locals()``, so a mistyped key
+        would silently yield ``None`` -- which the pass reads as "not supplied" --
+        and the field would be neither emitted nor reported. This is the guard
+        against that, since nothing else would fail.
+
+        **Validates: Requirements 4.1**
+        """
+        params = set(
+            inspect.signature(UptimeKumaApi._build_monitor_data).parameters
+        )
+        self.assertEqual(set(_V2_ONLY_MONITOR_FIELDS) - params, set())
+
+
+class TestV2OnlyFieldsSignal(_V2FieldsApiMixin, unittest.TestCase):
+    """The caller is told, once per call, which fields were withheld.
+
+    Every test here wraps the call in ``warnings.catch_warnings()`` with
+    ``simplefilter("always")``. Without it these tests would be vacuous: the
+    default filter shows a warning once per (message, category, module, lineno),
+    so a second call from the same line emits nothing and an assertion counting
+    warnings would pass having observed none.
+    """
+
+    def _capture(self, call, *args, **kwargs):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            call(*args, **kwargs)
+        return [w for w in caught
+                if issubclass(w.category, UnsupportedFieldWarning)]
+
+    def test_one_warning_names_every_withheld_field(self):
+        """A call withholding three fields emits one warning naming all three.
+
+        **Validates: Requirements 2.1, 2.3**
+        """
+        caught = self._capture(
+            self._build(V1_VERSION),
+            type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+            bearer_token="tok", cacheBust=True, subtype="sub",
+        )
+        self.assertEqual(len(caught), 1)
+        message = str(caught[0].message)
+        for name in ("bearer_token", "cacheBust", "subtype"):
+            self.assertIn(name, message)
+
+    def test_warning_names_floor_and_observed_version(self):
+        """The message carries the required version and the observed one.
+
+        **Validates: Requirements 2.1, 2.2**
+        """
+        caught = self._capture(
+            self._build(V1_VERSION),
+            type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+            bearer_token="tok",
+        )
+        message = str(caught[0].message)
+        self.assertIn("bearer_token", message)
+        self.assertIn("2.0", message)
+        self.assertIn(V1_VERSION, message)
+
+    def test_warning_does_not_name_a_sent_field(self):
+        """A field that was sent is never named as withheld.
+
+        **Validates: Requirements 2.3**
+        """
+        caught = self._capture(
+            self._build(V1_VERSION),
+            type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+            bearer_token="tok", interval=120,
+        )
+        message = str(caught[0].message)
+        self.assertNotIn("interval", message)
+
+    def test_no_warning_when_no_v2_field_supplied(self):
+        """The default pre-2.0 path stays silent.
+
+        This is what makes the signal usable rather than noise.
+
+        **Validates: Requirements 2.4**
+        """
+        caught = self._capture(
+            self._build(V1_VERSION),
+            type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+        )
+        self.assertEqual(caught, [])
+
+    def test_no_warning_on_a_supporting_server(self):
+        """Fields supplied and supported emit nothing.
+
+        **Validates: Requirements 2.6, 6.5**
+        """
+        caught = self._capture(
+            self._build(V2_VERSION),
+            type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+            bearer_token="tok", cacheBust=True,
+        )
+        self.assertEqual(caught, [])
+
+    def test_message_is_stable_across_calls(self):
+        """The same call produces a byte-identical message every time.
+
+        Field order comes from the registry's declaration order, never from a set
+        -- hash order would make the same call warn once on one run and twice on
+        the next, because the message text is part of the dedup key.
+
+        **Validates: Requirements 2.1, 4.9**
+        """
+        def once():
+            return str(self._capture(
+                self._build(V1_VERSION),
+                type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+                subtype="sub", bearer_token="tok", cacheBust=True,
+            )[0].message)
+
+        self.assertEqual(once(), once())
+
+    def test_falsy_but_not_none_is_withheld_and_announced(self):
+        """A falsy supplied value is still a request.
+
+        **Validates: Requirements 1.10, 2.8**
+        """
+        for name, value in FIELD_FALSY_VALUES.items():
+            with self.subTest(field=name, value=value):
+                api = self._api(V1_VERSION)
+                build = UptimeKumaApi._build_monitor_data.__get__(api)
+                kwargs = {
+                    "type": MonitorType.HTTP,
+                    "name": "m",
+                    "url": "http://127.0.0.1",
+                    name: value,
+                }
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    result = build(**kwargs)
+                relevant = [w for w in caught
+                            if issubclass(w.category, UnsupportedFieldWarning)]
+                self.assertNotIn(name, result)
+                self.assertEqual(len(relevant), 1)
+                self.assertIn(name, str(relevant[0].message))
+
+    def test_stacklevel_blames_the_caller(self):
+        """The warning points at the caller's line, not at api.py.
+
+        A wrong ``stacklevel`` does not raise and ``catch_warnings`` records the
+        warning either way, so this assertion is the only thing that catches it.
+
+        **Validates: Requirements 2.1**
+        """
+        api = self._api(V1_VERSION)
+        add_monitor = UptimeKumaApi.add_monitor.__get__(api)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            add_monitor(
+                type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+                bearer_token="tok",
+            )
+        relevant = [w for w in caught
+                    if issubclass(w.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 1)
+        self.assertEqual(
+            os.path.basename(relevant[0].filename), os.path.basename(__file__),
+            f"warning blamed {relevant[0].filename}, not the caller",
+        )
+
+    def test_simplefilter_error_escalates_to_an_exception(self):
+        """A caller can turn the warning into a hard failure, opt-in.
+
+        This is the property that makes raise-for-all available without the
+        library imposing it on anyone.
+
+        **Validates: Requirements 2.10**
+        """
+        api = self._api(V1_VERSION)
+        build = UptimeKumaApi._build_monitor_data.__get__(api)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnsupportedFieldWarning)
+            with self.assertRaises(UnsupportedFieldWarning):
+                build(
+                    type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+                    bearer_token="tok",
+                )
+
+
+class TestV2OnlyFieldsEditPath(_V2FieldsApiMixin, unittest.TestCase):
+    """``edit_monitor`` withholds the caller's field without touching the server's.
+
+    It never calls ``_build_monitor_data`` -- it merges ``get_monitor(id_)``
+    output and calls ``editMonitor`` -- so the rule reaches it separately, and the
+    withheld set is computed from ``kwargs`` before the merge.
+    """
+
+    def _edit_api(self, version, existing=None):
+        api = self._api(version)
+        api.get_monitor.return_value = dict(
+            existing if existing is not None else EDIT_MONITOR_EXISTING
+        )
+        return api
+
+    def test_withheld_field_is_not_merged(self):
+        """A below-floor field the caller supplied does not reach the payload.
+
+        **Validates: Requirements 1.6, 9.2**
+        """
+        api = self._edit_api(V1_VERSION)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UnsupportedFieldWarning)
+            edit_monitor(7, bearer_token="tok")
+        sent = api._call.call_args[0][1]
+        self.assertNotIn("bearer_token", sent)
+
+    def test_a_key_the_server_returned_is_preserved(self):
+        """A v2-only key present only in the ``get_monitor`` response survives.
+
+        Deleting keys after the merge cannot tell a caller's key from the
+        server's, so a monitor carrying a v2-only column would lose it on any
+        unrelated edit. Computing the withheld set from ``kwargs`` before merging
+        is what avoids that.
+
+        **Validates: Requirements 9.3**
+        """
+        existing = dict(EDIT_MONITOR_EXISTING)
+        existing["bearer_token"] = "server-side"
+        api = self._edit_api(V1_VERSION, existing)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+
+        edit_monitor(7, interval=120)
+
+        sent = api._call.call_args[0][1]
+        self.assertEqual(sent["bearer_token"], "server-side")
+        self.assertEqual(sent["interval"], 120)
+
+    def test_caller_value_wins_for_a_supported_field(self):
+        """The merge still gives the caller precedence for anything sent.
+
+        **Validates: Requirements 9.2**
+        """
+        api = self._edit_api(V1_VERSION)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+
+        edit_monitor(7, interval=999)
+
+        sent = api._call.call_args[0][1]
+        self.assertEqual(sent["interval"], 999)
+        api._call.assert_called_once()
+        self.assertEqual(api._call.call_args[0][0], "editMonitor")
+
+    def test_one_warning_on_the_edit_path(self):
+        """The edit path reports withheld fields the same way.
+
+        **Validates: Requirements 1.6, 2.1**
+        """
+        api = self._edit_api(V1_VERSION)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            edit_monitor(7, bearer_token="tok", cacheBust=True)
+        relevant = [w for w in caught
+                    if issubclass(w.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("bearer_token", str(relevant[0].message))
+        self.assertIn("cacheBust", str(relevant[0].message))
+
+    def test_escalated_warning_raises_before_get_monitor(self):
+        """An escalated warning costs no ``getMonitor`` round trip.
+
+        The same property the ``conditions`` guard already holds.
+
+        **Validates: Requirements 2.5, 2.10**
+        """
+        api = self._edit_api(V1_VERSION)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnsupportedFieldWarning)
+            with self.assertRaises(UnsupportedFieldWarning):
+                edit_monitor(7, bearer_token="tok")
+        api.get_monitor.assert_not_called()
+        api._call.assert_not_called()
+
+    def test_no_warning_for_an_ordinary_edit(self):
+        """Editing an unrelated field on a v1 server stays silent.
+
+        The edit path applies no monitor-type restriction, so a type-restricted
+        field must not be dropped merely because the caller named no type. This is
+        the negative assertion that pins that choice.
+
+        **Validates: Requirements 2.4, 9.2**
+        """
+        api = self._edit_api(V1_VERSION)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            edit_monitor(7, interval=120)
+        relevant = [w for w in caught
+                    if issubclass(w.category, UnsupportedFieldWarning)]
+        self.assertEqual(relevant, [])
+
+
+class TestV2OnlyFieldsRulePreservation(_V2FieldsApiMixin, unittest.TestCase):
+    """What the rule must not disturb."""
+
+    def test_conditions_still_raises_on_v1_and_emits_no_warning(self):
+        """``conditions`` is the named exception, not part of the general rule.
+
+        Pinning "raises AND does not warn" is what stops it drifting into the
+        withhold path in a later refactor.
+
+        **Validates: Requirements 1.3, 2.5**
+        """
+        api = self._api(V1_VERSION)
+        build = UptimeKumaApi._build_monitor_data.__get__(api)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with self.assertRaises(UptimeKumaException) as ctx:
+                build(
+                    type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+                    conditions=SAMPLE_CONDITIONS,
+                )
+        self.assertIn("conditions", str(ctx.exception))
+        relevant = [w for w in caught
+                    if issubclass(w.category, UnsupportedFieldWarning)]
+        self.assertEqual(relevant, [])
+
+    def test_exactly_one_registry_entry_raises(self):
+        """The verdict-versus-mechanism test, made executable.
+
+        A field that changes the monitor's verdict raises; a field that changes
+        how the check runs is withheld. A second raise entry has to justify itself
+        against a failing test rather than against a paragraph.
+
+        **Validates: Requirements 1.4**
+        """
+        raising = [n for n, r in _V2_ONLY_MONITOR_FIELDS.items()
+                   if r.behaviour == _RAISE]
+        self.assertEqual(raising, ["conditions"])
+
+    def test_conditions_identity_preserved_on_v2(self):
+        """The caller's own list object reaches a 2.x payload.
+
+        Together with the ``None`` case below, this is what makes a
+        ``conditions if conditions else list()`` form fail a test: that form
+        allocates a fresh list for a falsy empty list.
+
+        **Validates: Requirements 6.2**
+        """
+        for supplied in ([{"type": "expression"}], []):
+            with self.subTest(conditions=supplied):
+                result = self._build(V2_VERSION)(
+                    type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+                    conditions=supplied,
+                )
+                self.assertIs(result["conditions"], supplied)
+
+    def test_conditions_none_becomes_empty_list_on_v2(self):
+        """``None`` yields ``[]``, indistinguishable from an explicit ``[]``.
+
+        **Validates: Requirements 6.3**
+        """
+        result = self._build(V2_VERSION)(
+            type=MonitorType.HTTP, name="m", url="http://127.0.0.1",
+        )
+        self.assertEqual(result["conditions"], [])
+
+    def test_unparseable_version_is_treated_as_newest(self):
+        """A nightly build gets every field and no warning.
+
+        **Validates: Requirements 5.3**
+        """
+        for version in (NIGHTLY_VERSION, GARBAGE_VERSION):
+            with self.subTest(version=version):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    result = self._build_field(version, "bearer_token")
+                relevant = [w for w in caught
+                            if issubclass(w.category, UnsupportedFieldWarning)]
+                self.assertIn("bearer_token", result)
+                self.assertEqual(relevant, [])
+
+    def test_type_error_still_precedes_the_pass(self):
+        """A non-list ``conditions`` raises ``TypeError`` on both majors.
+
+        Validation is version-independent and comes first, so a bad value is a bad
+        value regardless of what the server supports.
+
+        **Validates: Requirements 6.4**
+        """
+        for version in (V1_VERSION, V2_VERSION):
+            with self.subTest(version=version):
+                build = self._build(version)
+                with self.assertRaises(TypeError) as ctx:
+                    build(
+                        type=MonitorType.HTTP, name="m",
+                        url="http://127.0.0.1", conditions="nope",
+                    )
+                self.assertEqual(
+                    str(ctx.exception), "conditions must be a list or None"
+                )
+                self.assertNotIsInstance(ctx.exception, UptimeKumaException)
+
+    def test_value_error_still_precedes_the_pass(self):
+        """Argument validation is not weakened by the gate.
+
+        ``responseMaxLength=0`` is rejected on both majors, which is also why it
+        cannot serve as the falsy-value case elsewhere in this file.
+
+        **Validates: Requirements 6.4**
+        """
+        for version in (V1_VERSION, V2_VERSION):
+            with self.subTest(version=version):
+                with self.assertRaises(ValueError):
+                    self._build(version)(
+                        type=MonitorType.HTTP, name="m",
+                        url="http://127.0.0.1", responseMaxLength=0,
+                    )
+
+    def test_registry_is_private(self):
+        """Neither the registry nor its helpers is public API.
+
+        Mirrors the assertion already made for ``_V2_ONLY_MONITOR_TYPES``.
+
+        **Validates: Requirements 4.3**
+        """
+        import uptime_kuma_api
+
+        public = [n for n in dir(uptime_kuma_api) if not n.startswith("_")]
+        self.assertNotIn("_V2_ONLY_MONITOR_FIELDS", dir(uptime_kuma_api))
+        self.assertFalse(
+            [n for n in public if "MONITOR_FIELDS" in n.upper()],
+            f"unexpected public export: {public}",
+        )
+
+    def test_warning_category_shape(self):
+        """The category is filterable and is not caught by the library's base.
+
+        ``simplefilter("error", ...)`` targeting depends on the ``UserWarning``
+        ancestry, and a caller writing ``except UptimeKumaException`` must not be
+        surprised into swallowing it.
+
+        **Validates: Requirements 2.9**
+        """
+        self.assertTrue(issubclass(UnsupportedFieldWarning, UserWarning))
+        self.assertFalse(
+            issubclass(UnsupportedFieldWarning, UptimeKumaException)
+        )
+
+    def test_only_one_new_public_name(self):
+        """``UnsupportedFieldWarning`` is exported, and nothing else new is.
+
+        **Validates: Requirements 6.9, 6.10**
+        """
+        import uptime_kuma_api
+
+        self.assertIn("UnsupportedFieldWarning", dir(uptime_kuma_api))
+        self.assertEqual(
+            sorted(n for n in dir(uptime_kuma_api)
+                   if not n.startswith("_") and "Warning" in n),
+            ["UnsupportedFieldWarning"],
+        )
+
+    def test_public_signatures_unchanged(self):
+        """``add_monitor`` and ``edit_monitor`` keep their signatures.
+
+        **Validates: Requirements 6.8**
+        """
+        self.assertEqual(
+            list(inspect.signature(UptimeKumaApi.add_monitor).parameters),
+            ["self", "kwargs"],
+        )
+        self.assertEqual(
+            list(inspect.signature(UptimeKumaApi.edit_monitor).parameters),
+            ["self", "id_", "kwargs"],
         )
 
 
