@@ -109,8 +109,24 @@ this fix applies. A per-type floor was considered and rejected:
   a *new* narrowing for v2 users, not a v1 regression fix, and it would make this
   the only per-type version floor in the library. That is scope creep into #14's
   territory (one rule for v2-only things) and belongs there.
-- Recorded here rather than dropped, so #14 inherits the fact rather than
-  rediscovering it.
+- Recorded here rather than dropped, so the follow-up inherits the fact rather
+  than rediscovering it.
+
+> **Corrected pointer: the `SYSTEM_SERVICE` floor is owned by
+> [#28](https://github.com/pbarone/uptime-kuma-api2/issues/28), not by #14.**
+> #14 turned out to be scoped to v2-only *fields*, on the same reasoning this
+> document uses to justify raising for a type: a type is not a parameter whose
+> loss can be degraded, so it does not belong in a field-policy spec. #28 is the
+> issue that carries the per-type floor map and the 2.1 floor for
+> `system-service`. #14 shipped as `.kiro/specs/v2-only-fields-rule/` and
+> touches no monitor type.
+>
+> One fact from #14's own dependency is worth carrying here, because it changes
+> what a naive 2.1 floor would do: under PEP 440 a pre-release sorts below its
+> release, so a `>= 2.1` gate would have rejected tag `2.1.0-beta.1` — the very
+> build that first carried `system-service`. That was fixed library-wide in
+> [#30](https://github.com/pbarone/uptime-kuma-api2/issues/30), which compares on
+> the release segment, so #28 inherits a comparison that handles it.
 
 ## Implementation
 

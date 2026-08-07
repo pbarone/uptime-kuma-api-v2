@@ -202,6 +202,21 @@ Implement the full backlog of Uptime Kuma v2 support items in the `uptime-kuma-a
    > v2-only field" signal is a tracked follow-up; if it lands, the `conditions` raise can be retired and this
    > requirement becomes blanket again.
    >
+   > **FURTHER NARROWED by `.kiro/specs/v2-only-fields-rule/` (issue #14) — the phrase `without raising an error or
+   > logging a warning` no longer holds.** That follow-up landed. Omission is still the rule and no error is raised, but
+   > it is no longer silent: every withheld v2-only monitor field is now reported by a single
+   > `UnsupportedFieldWarning` per `add_monitor` / `edit_monitor` call, naming each withheld field, the version it
+   > requires and the version the server reports. The reversal is deliberate and its reason is specific: this
+   > requirement's silence rested on the premise that a dropped field fails observably, and the issue #12 verification
+   > falsified that premise for a whole subclass of fields — omitting the companion fields of a monitor type the server
+   > cannot run converted an immediate `SQLITE_ERROR` into a monitor that answered `Added Successfully.` and then sat
+   > `PENDING` indefinitely. A caller could not tell a degraded check from a working one. **Do not restore the silent
+   > wording**: it was chosen before that evidence existed. The `conditions` raise was *retained* rather than retired,
+   > as the one named exception, under a written test — a field that changes the monitor's verdict raises, a field that
+   > changes how the check runs is withheld with a warning. The reachable-on-v1 fields were additionally verified
+   > against a real 1.23.2 server, which rejects all 25, so none of them was mis-gated:
+   > `.kiro/specs/v2-only-fields-rule/v1-verification-results.md`.
+   >
    > **Scope pointer, not a further narrowing:** this requirement governs v2-only monitor **parameters**. It does not
    > govern the four v2-only monitor **types** (`RABBITMQ`, `SNMP`, `SMTP`, `SYSTEM_SERVICE`), which
    > `.kiro/specs/v2-only-monitor-types-gate/` **rejects** on a pre-2.0 server — see the annotation on requirement 1.7

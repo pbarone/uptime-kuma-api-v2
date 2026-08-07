@@ -231,7 +231,7 @@ condition the properties are red against.
 
 ## Phase 5 — documentation and record-keeping, in the same merged change
 
-- [ ] 12. Write the single normative rule statement
+- [x] 12. Write the single normative rule statement
   - New labelled section in `docs/api.rst` after `Main Interface`:
     `.. _v2-only-fields:` / `Version-gated monitor fields`
   - State all five required things: the class the rule governs, where a caller
@@ -250,7 +250,7 @@ condition the properties are red against.
   - `docs/make.bat html` runs warning-free and the `:ref:` resolves
   - _Requirements: 1.3, 1.4, 1.7, 3.1, 3.2, 3.6, 3.7, 3.8_
 
-- [ ] 13. Update the cross-spec record and the changelog
+- [x] 13. Update the cross-spec record and the changelog
   - `CHANGELOG.md` under the shipping heading: the rule, every field whose
     behaviour changes, what a caller relying on the old behaviour now observes,
     that the change is **non-breaking**, and that `conditions` is unchanged from
@@ -273,7 +273,7 @@ condition the properties are red against.
     send the reader to #14 for the `SYSTEM_SERVICE` floor that **#28** now owns
   - _Requirements: 3.3, 3.4, 3.5, 9.4_
 
-- [ ] 14. Open the two tracked follow-ups
+- [x] 14. Open the two tracked follow-ups
   - The un-inventoried v2-only surfaces, per decision 5. Carry forward what the
     requirements now record: `_build_status_page_data` already has a `2.0` gate
     with a **third** pattern — `analyticsType` / `analyticsId` /

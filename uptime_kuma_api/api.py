@@ -1976,6 +1976,12 @@ class UptimeKumaApi(object):
         """
         Adds a new monitor.
 
+        Some monitor fields only exist from a certain Uptime Kuma version onward.
+        If you supply one the connected server does not implement, it is left out
+        of the payload and reported once with an :class:`UnsupportedFieldWarning`.
+        See :ref:`v2-only-fields` for the rule, including the one field that
+        raises instead and how to make the warning raise if you prefer.
+
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
@@ -2002,6 +2008,13 @@ class UptimeKumaApi(object):
     def edit_monitor(self, id_: int, **kwargs) -> dict:
         """
         Edits an existing monitor.
+
+        Some monitor fields only exist from a certain Uptime Kuma version onward.
+        If you supply one the connected server does not implement, it is left out
+        of the payload and reported once with an :class:`UnsupportedFieldWarning`.
+        A value the server itself returned is never treated as a request, so
+        editing an unrelated field cannot drop it. See :ref:`v2-only-fields` for
+        the rule.
 
         :param int id_: The monitor id.
         :return: The server response.
