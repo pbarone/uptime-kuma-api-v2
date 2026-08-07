@@ -80,6 +80,21 @@ These scripts **create and delete data** on whatever you point them at —
 a disposable instance you own, and always run `live_test_cleanup.py --dry-run`
 before the real thing.
 
+If you have a Docker host to hand, `scripts/run_disposable_kuma.ps1` removes the
+"disposable instance you own" problem: it starts a throwaway container, runs one
+script against it, and destroys the container in a `finally` block even if the
+script raises.
+
+```powershell
+pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_v2_only_fields_v1.py
+```
+
+The scripts prefixed `live_test_*_v1.py` are the odd ones out and read their own
+`UPTIME_KUMA_V1_*` keys rather than the `tests/.env` ones, precisely so a script
+that creates monitors cannot reach a 2.x instance by misconfiguration. The runner
+sets those keys for the child process, so it needs no `tests/.env` at all. See
+`scripts/README.md`.
+
 ## What we look for in a change
 
 - **Reproduce before fixing.** Issue titles here often misdescribe the real
