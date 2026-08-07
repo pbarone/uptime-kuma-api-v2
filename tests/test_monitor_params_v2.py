@@ -695,6 +695,61 @@ GARBAGE_VERSION = "not-a-version"
 # Every gate constant that api.py compares self.version against.
 GATE_CONSTANTS = ["1.22", "1.23", "1.23.1", "2.0"]
 
+# Real Uptime Kuma pre-release tags, mapped to the release each belongs to.
+#
+# Verified against louislam/uptime-kuma: every tag below exists (git ls-remote
+# --tags) and each one's package.json "version" equals the tag name, which is
+# the string the server reports over the ``info`` event. So these are the
+# literal strings a beta server sends, not canonical PEP 440 spellings chosen
+# for the test.
+#
+# Under plain PEP 440 ordering a pre-release sorts BELOW its own release, so
+# every one of these was classified as the version before it (#30).
+REAL_PRERELEASE_VERSIONS = {
+    "1.23.0-beta.1": "1.23.0",
+    "2.0.0-beta.0": "2.0.0",
+    "2.0.0-beta.3": "2.0.0",
+    "2.0.0-beta.4": "2.0.0",
+    "2.1.0-beta.1": "2.1.0",
+}
+
+# Non-final PEP 440 spellings that must gate as their own release segment.
+# Not Uptime Kuma tags: these cover the forms ``packaging`` itself produces,
+# including the two (post, local) that already compared correctly before #30
+# and must keep doing so.
+RELEASE_SEGMENT_VERSIONS = {
+    "2.0.0a1": "2.0.0",
+    "2.0.0b1": "2.0.0",
+    "2.0.0rc1": "2.0.0",
+    "2.0.0.dev1": "2.0.0",
+    "2.0.0.post1": "2.0.0",
+    "2.0.0+local.1": "2.0.0",
+}
+
+# The two values that must reach the sentinel instead of escaping as an
+# exception. ``None`` is what ``version`` returns when the cached ``info``
+# payload carries no "version" key; ``parse_version(None)`` raises TypeError,
+# which the original ``except InvalidVersion`` did not catch (#30 defect B).
+MISSING_VERSIONS = [None, ""]
+
+
+def gate_verdict(raw_version, floor):
+    """The library's version-gate rule, restated once for use as a test oracle.
+
+    Defined in one place because it previously was not: three separate tests
+    each re-derived the comparison as ``parse_version(self.version) >= floor``,
+    and all three had to change together when #30 changed how the comparison is
+    performed. That is the same drift failure mode this project has hit before,
+    so the rule now has a single expression here.
+
+    Deliberately NOT delegating to ``UptimeKumaApi._parsed_version()``: an oracle
+    that calls the implementation it is checking asserts nothing. This is an
+    independent statement of the same rule, so the two can disagree and a test
+    will say so.
+    """
+    parsed = parse_version(parse_version(raw_version).base_version)
+    return parsed >= parse_version(floor)
+
 
 class _VersionOnlyApi(UptimeKumaApi):
     """A real ``UptimeKumaApi`` with only the server version wired up.
@@ -804,6 +859,43 @@ class TestUnparseableVersionBugCondition(unittest.TestCase):
         """_build_monitor_data completes on a garbage version, newest branch taken."""
         self._assert_gated_path_runs(GARBAGE_VERSION)
 
+    # ─── #30 defect B: a missing version must not escape ──────────────
+
+    def test_missing_version_reaches_the_sentinel(self):
+        """``None`` and ``""`` are treated as newest, like any unparseable value.
+
+        Regression test for #30 defect B. The asymmetry was the defect: ``""``
+        raises ``InvalidVersion`` and was caught, while ``None`` raises
+        ``TypeError`` and escaped from the same function for no stated reason.
+        """
+        for raw in MISSING_VERSIONS:
+            with self.subTest(version=raw):
+                self._assert_newest(raw)
+
+    def test_gated_path_runs_for_missing_version(self):
+        """A version-gated path completes when the server reported no version."""
+        for raw in MISSING_VERSIONS:
+            with self.subTest(version=raw):
+                self._assert_gated_path_runs(raw)
+
+    def test_missing_version_raises_no_type_error(self):
+        """The escaping exception is named explicitly, so the fix cannot regress.
+
+        ``_assert_newest`` above would catch this too, but only as a generic
+        failure. Asserting on ``TypeError`` by name pins the actual defect: it
+        is what ``except InvalidVersion`` let through.
+        """
+        for raw in MISSING_VERSIONS:
+            with self.subTest(version=raw):
+                api = _VersionOnlyApi(raw)
+                try:
+                    api._parsed_version()
+                except TypeError as e:
+                    self.fail(
+                        f"_parsed_version() let a TypeError escape for "
+                        f"version {raw!r}: {e}"
+                    )
+
 
 # The four canonical valid versions named in the preservation requirement:
 # a pre-1.22 v1, a late v1, the v2 boundary itself, and a current v2.
@@ -876,36 +968,14 @@ class _RawVersionApi(UptimeKumaApi):
         return self._raw_info
 
 
-class TestValidVersionGatePreservation(unittest.TestCase):
-    """Bug D (#74) — preservation baseline for valid PEP440 server versions.
+class _GateProbeMixin:
+    """Observes gate outcomes through the two offline-reachable gate sites.
 
-    Bug condition::
-
-        isBugCondition_D(X) == NOT isPep440Parseable(X)
-
-    These cases are the ``NOT isBugCondition_D`` side: the server reported a
-    version string ``packaging`` can parse, so ``F(X) = F'(X)`` must hold. The
-    planned fix routes every gate through a private ``_parsed_version()`` choke
-    point; for a parseable version that accessor returns exactly
-    ``parse_version(self.version)``, so nothing may move.
-
-    The observed (UNFIXED) behavior encoded here, expressed through the two
-    offline-reachable gate sites rather than the gate expression itself (so the
-    baseline survives the refactor):
-
-    * ``_build_monitor_data`` — ``parent`` appears from 1.22, ``timeout`` and
-      ``invertKeyword`` from 1.23, ``ipFamily`` / ``cacheBust`` from 2.0;
-    * ``set_settings`` — ``chromeExecutable`` appears from 1.23 and ``nscd``
-      from 1.23.1;
-    * the public ``version`` property returns the raw server string unchanged.
-
-    Property 8 (Preservation): valid versions gate exactly as before, and
-    ``version`` is still raw.
-
-    **Validates: Requirements 3.6**
+    Shared so that the preservation tests and the pre-release tests below read
+    the gates the same way. A gate is observed by the payload key it controls
+    rather than by the gate expression, so these probes survive a change to how
+    the comparison is performed — which is exactly what #30 changes.
     """
-
-    # ─── probes: each returns the observed {gate_constant: taken} ──────
 
     def _monitor_gates(self, raw_version):
         """Observed gate outcomes for ``_build_monitor_data``."""
@@ -939,10 +1009,57 @@ class TestValidVersionGatePreservation(unittest.TestCase):
             "1.23.1": "nscd" in data,
         }
 
+
+class TestValidVersionGatePreservation(_GateProbeMixin, unittest.TestCase):
+    """Bug D (#74) — preservation baseline for valid PEP440 server versions.
+
+    Bug condition::
+
+        isBugCondition_D(X) == NOT isPep440Parseable(X)
+
+    These cases are the ``NOT isBugCondition_D`` side: the server reported a
+    version string ``packaging`` can parse, so ``F(X) = F'(X)`` must hold. The
+    planned fix routes every gate through a private ``_parsed_version()`` choke
+    point; for a parseable version that accessor returns exactly
+    ``parse_version(self.version)``, so nothing may move.
+
+    The observed (UNFIXED) behavior encoded here, expressed through the two
+    offline-reachable gate sites rather than the gate expression itself (so the
+    baseline survives the refactor):
+
+    * ``_build_monitor_data`` — ``parent`` appears from 1.22, ``timeout`` and
+      ``invertKeyword`` from 1.23, ``ipFamily`` / ``cacheBust`` from 2.0;
+    * ``set_settings`` — ``chromeExecutable`` appears from 1.23 and ``nscd``
+      from 1.23.1;
+    * the public ``version`` property returns the raw server string unchanged.
+
+    Property 8 (Preservation): valid versions gate exactly as before, and
+    ``version`` is still raw.
+
+    **Validates: Requirements 3.6**
+    """
+
+    # ─── the oracle ───────────────────────────────────────────────────
+
     def _expected_gates(self, raw_version, constants):
-        """The original expression: ``parse_version(self.version) >= X``."""
-        parsed = parse_version(raw_version)
-        return {c: parsed >= parse_version(c) for c in constants}
+        """The gate rule: the version's RELEASE SEGMENT against each floor.
+
+        Originally this was ``parse_version(self.version) >= X``, the gate
+        expression itself. #30 changed the comparison to run on the release
+        segment, so that oracle no longer describes the library and had to move
+        with the fix rather than be adjusted until it passed.
+
+        The distinction only bites for a non-final version: ``base_version`` is
+        the identity on a final release, so every assertion this oracle makes
+        about the 1.21.3-2.5.0 support range is byte-identical to what it
+        asserted before #30. That is the backward-compatibility contract, and it
+        is why this class is still a preservation class.
+
+        The pre-release side of the rule — where the two oracles disagree — is
+        asserted positively and against real Uptime Kuma tags in
+        ``TestPreReleaseVersionGating`` below, not left implicit here.
+        """
+        return {c: gate_verdict(raw_version, c) for c in constants}
 
     # ─── 1. the four canonical versions gate as the original did ──────
 
@@ -1030,29 +1147,188 @@ class TestValidVersionGatePreservation(unittest.TestCase):
                     f"settings gates moved for {raw!r}",
                 )
 
-    @unittest.skipUnless(
-        hasattr(UptimeKumaApi, "_parsed_version"),
-        "_parsed_version() does not exist yet (pre-fix)",
-    )
     def test_generated_valid_versions_parsed_version_equivalence(self):
-        """PBT: ``_parsed_version()`` equals ``parse_version(self.version)``.
+        """PBT: ``_parsed_version()`` equals the release segment of the version.
 
-        The choke point does not exist on the unfixed code, so this case is a
-        skip pre-fix and becomes the direct Property 8 equivalence assertion
-        once task 13.1 lands. The sibling test above covers the same property
-        through the gate sites in both states, so nothing goes unchecked here.
+        The direct form of the rule, asserted on the choke point itself rather
+        than through a gate site. Before #30 this asserted equality with
+        ``parse_version(self.version)``; the release segment is what the choke
+        point returns now, and for every final release in the support range the
+        two are the same object value.
+
+        (The ``skipUnless`` guard this test used to carry — for a state where
+        ``_parsed_version()`` did not exist — has been dropped: the method has
+        existed since 2.3.0, so the guard was permanently true and hid nothing.)
         """
         for raw in generate_valid_pep440_versions():
             with self.subTest(version=raw):
                 api = _VersionOnlyApi(raw)
-                original = parse_version(raw)
-                self.assertEqual(api._parsed_version(), original, raw)
+                expected = parse_version(parse_version(raw).base_version)
+                self.assertEqual(api._parsed_version(), expected, raw)
                 for constant in GATE_CONSTANTS:
                     self.assertEqual(
                         api._parsed_version() >= parse_version(constant),
-                        original >= parse_version(constant),
+                        gate_verdict(raw, constant),
                         f"gate {constant!r} moved for {raw!r}",
                     )
+
+    def test_final_releases_in_support_range_gate_exactly_as_before(self):
+        """The backward-compatibility contract, pinned without the shared oracle.
+
+        Every criterion above routes through ``_expected_gates``, which #30
+        changed. If that oracle were wrong, the preservation claim would be
+        self-consistent and still false. This test hardcodes the pre-#30
+        expression for final releases only — where ``base_version`` is the
+        identity, so the old expression is still authoritative — and walks the
+        supported 1.21.3 to 2.5.0 range plus every gate boundary.
+        """
+        final_releases = [
+            "1.21.3", "1.21.9", "1.22", "1.22.0", "1.22.1", "1.23",
+            "1.23.0", "1.23.1", "1.23.2", "1.23.13", "2.0", "2.0.0",
+            "2.0.1", "2.1.0", "2.2.0", "2.3.1", "2.4.0", "2.5.0",
+        ]
+        for raw in final_releases:
+            with self.subTest(version=raw):
+                pre_fix = parse_version(raw)
+                observed = self._monitor_gates(raw)
+                self.assertEqual(
+                    observed,
+                    {c: pre_fix >= parse_version(c) for c in observed},
+                    f"monitor gates moved for the final release {raw!r}",
+                )
+                observed = self._settings_gates(raw)
+                self.assertEqual(
+                    observed,
+                    {c: pre_fix >= parse_version(c) for c in observed},
+                    f"settings gates moved for the final release {raw!r}",
+                )
+
+
+class TestPreReleaseVersionGating(_GateProbeMixin, unittest.TestCase):
+    """#30 defect A - a pre-release server was gated as the version before it.
+
+    Bug condition::
+
+        isBugCondition(X) == X is a pre-release or dev-release whose release
+                             segment is at or above a gate floor
+
+    Under PEP 440 a pre-release sorts below its own release, so ``2.0.0b4 < 2.0``
+    is true. Uptime Kuma ships betas and reports the tag verbatim over the
+    ``info`` event, so a ``2.0.0-beta.4`` server was treated as 1.x by every gate
+    in the library, and a ``1.23.0-beta.1`` server as pre-1.23.
+
+    The fix compares on the release segment: ``2.0.0b1``, ``2.0.0rc1``,
+    ``2.0.0.dev1`` and ``2.0.0`` all evaluate alike against a ``2.0`` floor.
+
+    These cases were confirmed RED against the unfixed code, as
+    ``testing.md`` requires - a regression test that has only ever passed proves
+    nothing. Pre-fix, ``test_real_beta_tags_gate_as_their_release`` failed on the
+    first subtest with the 2.0 gate observed False where True was expected.
+    """
+
+    def _assert_gates_match_release(self, raw, release):
+        """Every gate outcome for ``raw`` must equal the outcome for ``release``."""
+        self.assertEqual(
+            self._monitor_gates(raw),
+            self._monitor_gates(release),
+            f"monitor gates for {raw!r} differ from its release {release!r}",
+        )
+        self.assertEqual(
+            self._settings_gates(raw),
+            self._settings_gates(release),
+            f"settings gates for {raw!r} differ from its release {release!r}",
+        )
+
+    def test_real_beta_tags_gate_as_their_release(self):
+        """Each real Uptime Kuma beta tag gates as the release it belongs to."""
+        for raw, release in REAL_PRERELEASE_VERSIONS.items():
+            with self.subTest(version=raw, release=release):
+                self._assert_gates_match_release(raw, release)
+
+    def test_pep440_non_final_forms_gate_as_their_release(self):
+        """Alpha, beta, rc, dev, post and local forms all gate as their release.
+
+        Post-releases and local versions were already correct before #30 and are
+        included so the fix is pinned as not having disturbed them.
+        """
+        for raw, release in RELEASE_SEGMENT_VERSIONS.items():
+            with self.subTest(version=raw, release=release):
+                self._assert_gates_match_release(raw, release)
+
+    def test_two_zero_beta_is_treated_as_v2(self):
+        """The headline case, asserted literally rather than by equivalence.
+
+        ``2.0.0-beta.4`` is the string in the #30 report. The sibling tests above
+        compare a beta against its own release, which would pass if BOTH were
+        wrong; this pins the concrete v2 verdict.
+        """
+        self.assertEqual(
+            self._monitor_gates("2.0.0-beta.4"),
+            {"1.22": True, "1.23": True, "2.0": True},
+        )
+
+    def test_one_twenty_three_beta_is_treated_as_1_23(self):
+        """``1.23.0-beta.1`` reaches the 1.23 gates it used to miss.
+
+        The other half of defect A: the misclassification was never confined to
+        the 2.0 boundary. This beta missed ``invertKeyword``, ``timeout`` and
+        ``gamedigGivenPortOnly``.
+        """
+        self.assertEqual(
+            self._monitor_gates("1.23.0-beta.1"),
+            {"1.22": True, "1.23": True, "2.0": False},
+        )
+        # 1.23.1 stays False: the beta belongs to release 1.23.0, which is below
+        # that floor. The fix promotes a pre-release to its own release, not to
+        # the next patch.
+        self.assertEqual(
+            self._settings_gates("1.23.0-beta.1"),
+            {"1.23": True, "1.23.1": False},
+        )
+
+    def test_prerelease_below_a_floor_is_still_below_it(self):
+        """The fix must not make every pre-release newest.
+
+        The release segment is compared, not discarded: a ``1.23.0-beta.1``
+        server is still below the 2.0 floor, and a ``2.0.0-beta.0`` server is
+        still below a 2.1 floor. Without this, a fix that returned the sentinel
+        for any pre-release would pass every other test in this class.
+        """
+        self.assertFalse(self._monitor_gates("1.23.0-beta.1")["2.0"])
+        self.assertLess(
+            _VersionOnlyApi("2.0.0-beta.0")._parsed_version(),
+            parse_version("2.1"),
+        )
+
+    def test_v2_only_monitor_type_accepted_on_a_2_0_beta(self):
+        """The user-visible symptom named in #30 is gone.
+
+        Pre-fix, ``add_monitor(type=SNMP)`` against a ``2.0.0-beta.4`` server
+        raised "monitor type 'snmp' requires Uptime Kuma 2.0 or newer, but the
+        server reports version 2.0.0-beta.4", which is wrong on its face.
+        """
+        api = _GateProbeApi("2.0.0-beta.4")
+        data = api._build_monitor_data(
+            type=MonitorType.SNMP,
+            name="test",
+            hostname="127.0.0.1",
+            port=161,
+            snmpOid="1.3.6.1.2.1.1.1.0",
+            jsonPath="$",
+            expectedValue="x",
+        )
+        self.assertEqual(data["type"], "snmp")
+
+    def test_prerelease_version_property_is_still_raw(self):
+        """``version`` keeps returning the server's string verbatim.
+
+        Normalisation is private to ``_parsed_version()``. A caller reading
+        ``version`` on a beta server must still see the beta string.
+        """
+        for raw in REAL_PRERELEASE_VERSIONS:
+            with self.subTest(version=raw):
+                api = _RawVersionApi(raw)
+                self.assertIs(api.version, raw)
 
 
 # The pre-2.0 server version every conditions-gate test is mocked against. Its
@@ -2061,7 +2337,7 @@ class TestConditionsGeneratedInputs(unittest.TestCase):
                     name="t",
                     url="http://x",
                 )
-                expected = parse_version(raw) >= parse_version("2.0")
+                expected = gate_verdict(raw, "2.0")
                 self.assertEqual(
                     "conditions" in result,
                     expected,
@@ -2088,7 +2364,7 @@ class TestConditionsGeneratedInputs(unittest.TestCase):
                 build = self._build_for(raw)
                 passed = [dict(c) for c in SAMPLE_CONDITIONS]
 
-                if parse_version(raw) >= parse_version("2.0"):
+                if gate_verdict(raw, "2.0"):
                     result = build(
                         type=MonitorType.HTTP,
                         name="t",
