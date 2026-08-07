@@ -967,11 +967,15 @@ class UptimeKumaApi(object):
 
         :param dict supplied: Caller-supplied values keyed by parameter name. A key
                               mapped to None counts as not supplied.
-        :param type_: The monitor type, when the caller named one. An entry
-                      carrying a type restriction is skipped when this is None,
-                      which is the ``edit_monitor`` path: that method applies no
-                      type restriction today, and inferring one from kwargs would
-                      omit fields on every ordinary edit call.
+        :param type_: The monitor type, when the caller named one. When it is
+                      None -- the ``edit_monitor`` path, which names no type --
+                      the *type restriction* is not applied but the version
+                      comparison still is. Skipping the whole entry instead would
+                      leave every type-restricted field ungated on that path, so
+                      ``edit_monitor(id_, bearer_token=...)`` would still send a
+                      column a 1.x server has no room for. Not applying the
+                      restriction costs nothing on 2.x, where such a field is at
+                      or above its floor and is never withheld anyway.
         :return: The withheld field names, in registry declaration order.
         :rtype: list
         """
@@ -982,7 +986,8 @@ class UptimeKumaApi(object):
                 continue
             if supplied.get(name) is None:
                 continue
-            if rule.types is not None and (type_ is None or type_ not in rule.types):
+            if rule.types is not None and type_ is not None \
+                    and type_ not in rule.types:
                 continue
             if parsed < parse_version(rule.floor):
                 withheld.append(name)
@@ -1379,8 +1384,7 @@ class UptimeKumaApi(object):
                 "jsonPath": jsonPath,
                 "expectedValue": expectedValue,
             })
-            if jsonPathOperator is not None and self._parsed_version() >= parse_version("2.0"):
-                data["jsonPathOperator"] = jsonPathOperator
+            # jsonPathOperator is version-gated by the registry pass below.
 
         # KAFKA_PRODUCER
         if type == MonitorType.KAFKA_PRODUCER:
@@ -1414,8 +1418,7 @@ class UptimeKumaApi(object):
                 "snmpOid": snmpOid,
                 "snmpVersion": snmpVersion,
             })
-            if snmp_v3_username is not None and self._parsed_version() >= parse_version("2.0"):
-                data["snmp_v3_username"] = snmp_v3_username
+            # snmp_v3_username is version-gated by the registry pass below.
 
         # SMTP (monitor type)
         if type == MonitorType.SMTP:
@@ -1429,69 +1432,42 @@ class UptimeKumaApi(object):
                 "system_service_name": system_service_name,
             })
 
-        # PING-specific params
-        if type == MonitorType.PING:
-            if self._parsed_version() >= parse_version("2.0"):
-                if ping_count is not None:
-                    data["ping_count"] = ping_count
-                if ping_numeric is not None:
-                    data["ping_numeric"] = ping_numeric
-                if ping_per_request_timeout is not None:
-                    data["ping_per_request_timeout"] = ping_per_request_timeout
-
-        # MQTT new params
-        if type == MonitorType.MQTT:
-            if self._parsed_version() >= parse_version("2.0"):
-                if mqttWebsocketPath is not None:
-                    data["mqttWebsocketPath"] = mqttWebsocketPath
-                if mqttCheckType is not None:
-                    data["mqttCheckType"] = mqttCheckType
-
-        # v2-only parameters (gated behind version check)
-        if self._parsed_version() >= parse_version("2.0"):
+        # conditions keeps its own emission line rather than going through the
+        # pass below: the caller's list must reach the payload as the same object,
+        # and None must become []. No other field has a value rule, so encoding
+        # this one as a per-entry coercion would add a third dimension to
+        # _FieldRule used exactly once.
+        if self._parsed_version() >= parse_version(
+                _V2_ONLY_MONITOR_FIELDS["conditions"].floor):
             data["conditions"] = conditions if conditions is not None else []
 
-            # Network monitors: ipFamily
-            network_types = [
-                MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
-                MonitorType.PING, MonitorType.PORT, MonitorType.DNS,
-                MonitorType.STEAM, MonitorType.MQTT, MonitorType.RADIUS,
-                MonitorType.TAILSCALE_PING, MonitorType.GRPC_KEYWORD,
-                MonitorType.SNMP, MonitorType.SMTP, MonitorType.RABBITMQ,
-            ]
-            if type in network_types and ipFamily is not None:
-                data["ipFamily"] = ipFamily
+        # Every other version-gated monitor field, emitted from the registry in
+        # one pass. A field the server is too old for is withheld and reported
+        # once, together, by the single warning at the end.
+        #
+        # locals() is read once here rather than spelling out 25 "name": name
+        # pairs. That is deliberate: a mistyped pair would yield None, the pass
+        # reads None as "not supplied", and the field would be neither emitted nor
+        # reported -- a silent hole. test_every_registry_key_is_a_build_monitor_data_parameter
+        # is what makes a wrong key fail instead.
+        local_values = locals()
+        supplied = {name: local_values.get(name)
+                    for name in _V2_ONLY_MONITOR_FIELDS}
 
-            # HTTP params (v2-only)
-            http_types = [MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY, MonitorType.REAL_BROWSER]
-            if type in http_types:
-                for field, value in [
-                    ("cacheBust", cacheBust),
-                    ("retryOnlyOnStatusCodeFailure", retryOnlyOnStatusCodeFailure),
-                    ("bearer_token", bearer_token),
-                    ("oauth_audience", oauth_audience),
-                    ("domainExpiryNotification", domainExpiryNotification),
-                    ("saveResponse", saveResponse),
-                    ("saveErrorResponse", saveErrorResponse),
-                    ("responseMaxLength", responseMaxLength),
-                    ("responsecheck", responsecheck),
-                ]:
-                    if value is not None:
-                        data[field] = value
+        withheld = self._withheld_v2_fields(supplied, type)
+        for name, rule in _V2_ONLY_MONITOR_FIELDS.items():
+            if rule.behaviour == _RAISE or name in withheld:
+                continue
+            value = supplied[name]
+            if value is None:
+                continue
+            if rule.types is not None and type not in rule.types:
+                continue
+            data[name] = value
 
-            # Low-priority params (v2-only, not type-gated)
-            for field, value in [
-                ("subtype", subtype),
-                ("wsSubprotocol", wsSubprotocol),
-                ("wsIgnoreSecWebsocketAcceptHeader", wsIgnoreSecWebsocketAcceptHeader),
-                ("remoteBrowsersToggle", remoteBrowsersToggle),
-                ("remote_browser", remote_browser),
-                ("screenshot_delay", screenshot_delay),
-                ("gamedigToken", gamedigToken),
-                ("protocol", protocol),
-            ]:
-                if value is not None:
-                    data[field] = value
+        # stacklevel 4: this method, add_monitor, the caller. The helper adds one
+        # more frame of its own.
+        self._warn_withheld_v2_fields(withheld, stacklevel=4)
 
         return data
 
@@ -2047,8 +2023,28 @@ class UptimeKumaApi(object):
         # explicitly asked for, so editing an unrelated field on a monitor that
         # already carries a v2-only type cannot raise spuriously.
         self._check_monitor_type_supported(kwargs.get("type"))
+
+        # Decide from kwargs BEFORE the merge, then merge only what survives.
+        #
+        # Deleting keys after the merge would be the wrong shape: del data[key]
+        # cannot tell a key the caller supplied from one getMonitor returned, so a
+        # monitor already carrying a v2-only column would lose it on any unrelated
+        # edit. Computing the withheld set from kwargs keeps the server's own data
+        # untouched.
+        #
+        # No monitor type is passed, so the version comparison applies but the
+        # per-field type restriction does not. edit_monitor names no type, and
+        # enforcing the restriction from a kwargs lookup would drop a field on
+        # every ordinary edit call at every version, 2.x included. Leaving the
+        # restriction off costs nothing there -- a field at or above its floor is
+        # never withheld -- while still keeping a below-floor column off the wire.
+        withheld = self._withheld_v2_fields(kwargs)
+        # stacklevel 3: this method, the caller. The helper adds one more frame.
+        # Warned before get_monitor so an escalated warning costs no round trip.
+        self._warn_withheld_v2_fields(withheld, stacklevel=3)
+
         data = self.get_monitor(id_)
-        data.update(kwargs)
+        data.update({k: v for k, v in kwargs.items() if k not in withheld})
         _convert_monitor_input(data)
         _check_arguments_monitor(data)
         with self.wait_for_event(Event.MONITOR_LIST):

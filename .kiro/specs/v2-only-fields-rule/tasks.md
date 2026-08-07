@@ -131,7 +131,7 @@ condition the properties are red against.
 
 ## Phase 3 — tests, confirmed red before the pass is wired
 
-- [ ] 7. Write the four new test classes in `tests/test_monitor_params_v2.py`
+- [x] 7. Write the four new test classes in `tests/test_monitor_params_v2.py`
   - **No new test file.** Add classes only; do not edit any existing class
   - `TestV2OnlyFieldsWithheld` — properties 1, 2, 4. Parametrise over the
     registry rather than hand-picking, so a future entry is covered on arrival;
@@ -165,7 +165,7 @@ condition the properties are red against.
     `TestUnparseableVersionBugCondition` unmodified
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.9, 8.10, 8.12_
 
-- [ ] 8. Confirm the red run and record it
+- [x] 8. Confirm the red run and record it
   - Run `pytest -v` with tasks 4-6 in place but the pass not yet wired
   - Expect properties 1-4, 6 and 10 to fail: today's code withholds silently, so
     every warning assertion has nothing to catch, and `edit_monitor` merges a
@@ -180,7 +180,7 @@ condition the properties are red against.
 
 ## Phase 4 — wire the pass in
 
-- [ ] 9. Replace the `>= 2.0` block and the seven in-place gates in `_build_monitor_data`
+- [x] 9. Replace the `>= 2.0` block and the seven in-place gates in `_build_monitor_data`
   - Keep `conditions`' own emission line — the caller's list must reach the
     payload as the same object and `None` must become `[]`, a value rule no other
     field has
@@ -204,7 +204,7 @@ condition the properties are red against.
     `_check_conditions_supported`, then `_check_monitor_type_supported`
   - _Requirements: 1.1, 1.2, 1.10, 1.11, 2.7, 4.2, 4.5, 4.7, 5.1, 5.2, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 9.5_
 
-- [ ] 10. Wire the edit path in `edit_monitor`
+- [x] 10. Wire the edit path in `edit_monitor`
   - Compute the withheld set from `kwargs` **before** the merge, warn with
     `stacklevel=3`, then merge only the keys that were not withheld:
     `data.update({k: v for k, v in kwargs.items() if k not in withheld})`
@@ -220,7 +220,7 @@ condition the properties are red against.
   - Leave both existing guards reading `kwargs.get(...)` ahead of everything
   - _Requirements: 1.6, 2.5, 2.7, 9.2, 9.3, 9.6_
 
-- [ ] 11. Confirm green and re-verify the boundary
+- [x] 11. Confirm green and re-verify the boundary
   - `pytest -v` fully green, including the two untouched gate classes in the same
     run
   - Re-run the phase 3 red cases to confirm they now pass for the right reason,
