@@ -115,6 +115,29 @@ First line: `<type>: <summary>`. Types: `feat`, `fix`, `docs`, `test`, `ci`,
 `refactor`, `chore`. Breaking changes use `!` (e.g. `feat!: drop Python 3.7`).
 The type guides the version bump (fix → patch, feat → minor, breaking → major).
 
+## Claiming an issue before you start
+
+**Say on the issue that you want it, and it's yours.** A maintainer will add the
+`claimed` label. Before starting on something, check whether that label is
+already there — if it is, ask on the issue rather than opening a competing PR.
+
+The label exists because GitHub only lets you assign issues to people with write
+access to the repository, so an outside contributor who opened an issue cannot be
+assigned to it. Adding someone as a collaborator just to mark a claim would be a
+much bigger step than the claim warrants, so the label does that job instead.
+
+There is no deadline attached to a claim, and no obligation once you have made
+one. **If you get busy or it turns out to be more work than you expected, just
+say so on the issue.** That is genuinely more useful than going quiet, because it
+frees the issue up immediately. If a claimed issue does go quiet, a maintainer
+will ask on the issue whether you are still interested and say plainly what
+happens next, rather than silently taking it over.
+
+Credit does not depend on who writes the final code. `CHANGELOG.md` credits
+contributors by handle for the diagnosis as well as the fix — see the existing
+`(credit: @handle, PR #n)` entries. If a maintainer or another contributor builds
+on commits you have already pushed, that lands with a `Co-authored-by:` trailer.
+
 ## Pull requests
 
 1. Work on a branch named `<type>/<short-description>`, where `<type>` is the
