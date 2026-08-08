@@ -98,6 +98,18 @@ unsupported monitor type work.
 
 ## Why the gate is 2.0 and not per-type
 
+> **Superseded: per-type floors landed under
+> [#28](https://github.com/pbarone/uptime-kuma-api2/issues/28).** The reasoning
+> below is kept as the record of what was decided at the time, and one part of it
+> did not survive contact: deferring the `SYSTEM_SERVICE` floor was correct, but
+> "belongs with #14" was the wrong destination, since #14 turned out to be scoped
+> to v2-only *fields* on exactly the type-is-not-a-field grounds this document
+> argues elsewhere. `_V2_ONLY_MONITOR_TYPES` is now a type-to-floor mapping with
+> `system-service` at `2.1`, and the raised message names each type's own floor.
+> The prediction that a per-type floor "would make this the only per-type version
+> floor in the library" also expired: #14 shipped a per-field floor registry first,
+> so the per-type map mirrors an existing shape rather than introducing one.
+
 `SYSTEM_SERVICE` first appears in **2.1.0**, not 2.0.0 — stricter than the gate
 this fix applies. A per-type floor was considered and rejected:
 

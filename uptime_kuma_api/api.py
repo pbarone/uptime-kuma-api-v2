@@ -43,17 +43,33 @@ from .docstrings import (
 )
 
 
-# Monitor types Uptime Kuma only implements from 2.x onward. Each was added after
-# the 1.23 line closed and appears in no 1.x tag, so a pre-2.0 server has no
-# implementation of any of them and does not validate the type on the add path.
-# Provenance and observed v1 behaviour:
+# Monitor types Uptime Kuma only implements from a given 2.x version onward, each
+# mapped to the version that introduced it. Every one was added after the 1.23
+# line closed and appears in no 1.x tag, so a pre-2.0 server has no implementation
+# of any of them and does not validate the type on the add path.
+#
+# The floor is per type rather than a shared 2.0, because system-service arrived a
+# minor version later than the other three. A single 2.0 floor let it through on
+# 2.0.x, where the server accepted the monitor and then left it PENDING
+# indefinitely reporting "Unknown Monitor Type" -- the same failure the gate exists
+# to prevent, and the silent kind. The mapping shape mirrors
+# _V2_ONLY_MONITOR_FIELDS deliberately, so the version comparison reads the same
+# way in both places; the two are kept separate because a field and a type are
+# different kinds of thing and a shared namespace could collide meaninglessly.
+#
+# Floors are the upstream release each type first shipped in, established from
+# Uptime Kuma's own source and tags rather than inferred. Provenance and the
+# observed v1 behaviour:
 # .kiro/specs/v2-only-monitor-types-gate/pre-fix-evidence.md
-_V2_ONLY_MONITOR_TYPES = frozenset({
-    MonitorType.RABBITMQ,
-    MonitorType.SNMP,
-    MonitorType.SMTP,
-    MonitorType.SYSTEM_SERVICE,
-})
+_V2_ONLY_MONITOR_TYPES = {
+    MonitorType.RABBITMQ: "2.0",
+    MonitorType.SNMP: "2.0",
+    MonitorType.SMTP: "2.0",
+    # louislam/uptime-kuma#6488, merge 6a700cb, milestone 2.1.0. Absent from
+    # EditMonitor.vue at 2.0.0, 2.0.2 and 2.1.0-beta.0; first present at
+    # 2.1.0-beta.1.
+    MonitorType.SYSTEM_SERVICE: "2.1",
+}
 
 
 # What happens to a caller-supplied monitor field the connected server is too old
@@ -926,28 +942,38 @@ class UptimeKumaApi(object):
 
     def _check_monitor_type_supported(self, type_) -> None:
         """
-        Rejects a v2-only monitor type on a pre-2.0 server.
+        Rejects a monitor type the connected server is too old to implement.
+
+        Each type is compared against its own floor from
+        :data:`_V2_ONLY_MONITOR_TYPES`, not against a shared ``2.0``. Three of the
+        four arrived in 2.0.0, but ``system-service`` arrived in 2.1.0, and a
+        shared floor let it through on 2.0.x.
 
         Raises rather than proceeding, because a monitor type is not a parameter
-        whose loss can be degraded -- it is the thing being requested. A pre-2.0
-        server has no implementation of these types and does not validate the
-        type when a monitor is added, so an ungated request either fails with an
-        opaque ``SQLITE_ERROR`` naming a database column the caller never typed,
-        or -- once the type's v2-only companion fields are gated -- succeeds into
-        a monitor that stays ``PENDING`` forever reporting
+        whose loss can be degraded -- it is the thing being requested. A server
+        without an implementation of the type does not validate the type when a
+        monitor is added, so an ungated request either fails with an opaque
+        ``SQLITE_ERROR`` naming a database column the caller never typed, or --
+        once the type's version-gated companion fields are withheld -- succeeds
+        into a monitor that stays ``PENDING`` forever reporting
         ``Unknown Monitor Type``.
 
         :param type_: The caller-supplied monitor type, or None.
-        :raises UptimeKumaException: If a v2-only monitor type is requested on a
-                                     server older than 2.0.
+        :raises UptimeKumaException: If the requested monitor type requires a
+                                     newer server than the one connected.
         """
-        if type_ in _V2_ONLY_MONITOR_TYPES and self._parsed_version() < parse_version("2.0"):
+        floor = _V2_ONLY_MONITOR_TYPES.get(type_)
+        if floor is not None and self._parsed_version() < parse_version(floor):
             # MonitorType(type_).value rather than interpolating type_ directly:
             # str-Enum __format__ differs across Python 3.8-3.13, and the message
             # must read 'snmp' on every supported interpreter.
+            #
+            # The floor comes from the mapping rather than being hardcoded: telling
+            # a caller on 2.0.2 that they need "2.0 or newer" is a contradiction,
+            # since they already are.
             raise UptimeKumaException(
                 f"monitor type '{MonitorType(type_).value}' requires Uptime Kuma "
-                f"2.0 or newer, but the server reports version {self.version}"
+                f"{floor} or newer, but the server reports version {self.version}"
             )
 
     def _withheld_v2_fields(self, supplied, type_=None) -> list:

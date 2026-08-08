@@ -2647,9 +2647,14 @@ class TestV2OnlyMonitorTypesV1Gate(unittest.TestCase):
         *what* their server actually reports. The type is asserted as its string
         value rather than its repr, because str-Enum ``__format__`` differs across
         Python 3.8-3.13 and the message must be stable on all of them.
+
+        The required version is read from the type's own entry rather than
+        hardcoded. It was ``2.0`` for all four until issue #28 gave
+        ``system-service`` its real 2.1 floor, and hardcoding it here would assert
+        the message stays wrong for that type.
         """
         self.assertIn(MonitorType(type_).value, message, message)
-        self.assertIn("2.0", message, message)
+        self.assertIn(_V2_ONLY_MONITOR_TYPES[type_], message, message)
         self.assertIn(V1_VERSION, message, message)
 
     # ─── 1. each v2-only type is rejected on v1 ───────────────────────
@@ -3052,7 +3057,10 @@ def _reachable_on_v1(name):
     rule = _V2_ONLY_MONITOR_FIELDS[name]
     if rule.types is None:
         return True
-    return bool(rule.types - _V2_ONLY_MONITOR_TYPES)
+    # .keys() rather than the mapping itself: _V2_ONLY_MONITOR_TYPES became a
+    # type-to-floor mapping in issue #28, and `frozenset - dict` is a TypeError
+    # while `frozenset - dict.keys()` is the set difference this wants.
+    return bool(rule.types - _V2_ONLY_MONITOR_TYPES.keys())
 
 
 class _V2FieldsApiMixin:
@@ -3671,6 +3679,211 @@ class TestV2OnlyFieldsRulePreservation(_V2FieldsApiMixin, unittest.TestCase):
             list(inspect.signature(UptimeKumaApi.edit_monitor).parameters),
             ["self", "id_", "kwargs"],
         )
+
+
+# ---------------------------------------------------------------------------
+# Per-type version floors (issue #28).
+#
+# The four v2-only monitor types were gated behind a single 2.0 floor, but
+# system-service first ships in 2.1.0. On 2.0.x it therefore passed the gate and
+# created a monitor that sits PENDING forever reporting "Unknown Monitor Type" --
+# the same failure the gate exists to prevent, one minor version up, and the
+# silent kind. Each type now carries its own floor.
+# ---------------------------------------------------------------------------
+
+# Provenance for the 2.1 floor, from
+# .kiro/specs/v2-only-monitor-types-gate/pre-fix-evidence.md: system-service was
+# introduced by louislam/uptime-kuma#6488 (merge 6a700cb, milestone 2.1.0), is
+# absent from EditMonitor.vue at 2.0.0, 2.0.2 and 2.1.0-beta.0, and first appears
+# at 2.1.0-beta.1.
+SYSTEM_SERVICE_FLOOR = "2.1"
+TYPES_FLOORED_AT_2_0 = [
+    MonitorType.RABBITMQ,
+    MonitorType.SNMP,
+    MonitorType.SMTP,
+]
+
+
+class TestPerTypeVersionFloors(unittest.TestCase):
+    """Each v2-only monitor type is gated at the version that introduced it."""
+
+    def _api(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(api)
+        )
+        api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(api)
+        )
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
+        return api
+
+    def _build(self, version):
+        return UptimeKumaApi._build_monitor_data.__get__(self._api(version))
+
+    def _build_type(self, version, type_):
+        kwargs = dict(V2_ONLY_TYPE_CASES[type_])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UnsupportedFieldWarning)
+            return self._build(version)(type=type_, name="t", **kwargs)
+
+    # --- the bug condition: SYSTEM_SERVICE on 2.0.x ---
+
+    def test_system_service_rejected_across_the_whole_2_0_line(self):
+        """Every 2.0.x release predates system-service, so every one must reject it.
+
+        This is the defect. Before the per-type floor these calls returned
+        `Added Successfully.` and created a monitor that never produced a verdict.
+
+        **Validates: issue #28**
+        """
+        for version in ("2.0", "2.0.0", "2.0.1", "2.0.2"):
+            with self.subTest(version=version):
+                with self.assertRaises(UptimeKumaException) as ctx:
+                    self._build_type(version, MonitorType.SYSTEM_SERVICE)
+                self.assertIn("system-service", str(ctx.exception))
+
+    def test_system_service_message_names_its_own_floor_not_2_0(self):
+        """The message must say 2.1, because saying 2.0 is simply false.
+
+        A caller on 2.0.2 told they need "2.0 or newer" has been handed a
+        contradiction: they are already on 2.0 or newer.
+
+        **Validates: issue #28**
+        """
+        with self.assertRaises(UptimeKumaException) as ctx:
+            self._build_type("2.0.2", MonitorType.SYSTEM_SERVICE)
+        message = str(ctx.exception)
+        self.assertIn(SYSTEM_SERVICE_FLOOR, message)
+        self.assertIn("2.0.2", message)
+        self.assertNotIn(
+            "2.0 or newer", message,
+            "the message still claims a 2.0 floor for a 2.1 type",
+        )
+
+    # --- the floor is inclusive, and pre-releases of it count ---
+
+    def test_system_service_accepted_from_2_1_onward(self):
+        """At and above its own floor the type builds normally.
+
+        `2.1.0-beta.1` is the interesting one: it is the build that first carried
+        system-service, and under PEP 440 it sorts *below* `2.1.0`. It passes only
+        because `_parsed_version()` compares on the release segment (issue #30).
+        A naive `>= 2.1` gate would reject the very release that introduced the
+        feature it is gating.
+
+        **Validates: issue #28**
+        """
+        for version in ("2.1", "2.1.0", "2.1.0-beta.1", "2.2.0", "2.5.0"):
+            with self.subTest(version=version):
+                result = self._build_type(version, MonitorType.SYSTEM_SERVICE)
+                self.assertEqual(result["type"], MonitorType.SYSTEM_SERVICE)
+                self.assertEqual(result["system_service_name"], "cron")
+
+    def test_a_bare_string_type_is_floored_identically(self):
+        """`"system-service"` as a plain string gets the same floor.
+
+        `MonitorType` is a `str` Enum and inherits `str.__hash__`, so a bare
+        string hits the same mapping entry. Pinned because the frozenset this
+        replaced relied on the same property.
+
+        **Validates: issue #28**
+        """
+        with self.assertRaises(UptimeKumaException) as ctx:
+            self._build("2.0.2")(
+                type="system-service", name="t", system_service_name="cron",
+            )
+        self.assertIn(SYSTEM_SERVICE_FLOOR, str(ctx.exception))
+
+    def test_edit_monitor_uses_the_per_type_floor(self):
+        """The edit path is floored per type too, and still reads only kwargs.
+
+        **Validates: issue #28**
+        """
+        api = self._api("2.0.2")
+        api.get_monitor.return_value = dict(EDIT_MONITOR_EXISTING)
+        edit_monitor = UptimeKumaApi.edit_monitor.__get__(api)
+
+        with self.assertRaises(UptimeKumaException) as ctx:
+            edit_monitor(7, type=MonitorType.SYSTEM_SERVICE)
+
+        self.assertIn(SYSTEM_SERVICE_FLOOR, str(ctx.exception))
+        api.get_monitor.assert_not_called()
+        api._call.assert_not_called()
+
+    # --- preservation: the other three keep the 2.0 floor ---
+
+    def test_the_other_three_still_floored_at_2_0(self):
+        """`rabbitmq`, `snmp` and `smtp` are 2.0.0 types and must not move.
+
+        Rejected below 2.0 and accepted at 2.0 exactly, which is the boundary the
+        2.3.1 fix established and this change must not disturb.
+
+        **Validates: issue #28 preservation**
+        """
+        for type_ in TYPES_FLOORED_AT_2_0:
+            with self.subTest(type=type_, version="1.23.2"):
+                with self.assertRaises(UptimeKumaException):
+                    self._build_type("1.23.2", type_)
+            with self.subTest(type=type_, version="2.0"):
+                result = self._build_type("2.0", type_)
+                self.assertEqual(result["type"], type_)
+
+    def test_the_other_three_keep_the_2_0_message(self):
+        """Their message still names 2.0, unchanged from 2.3.1.
+
+        **Validates: issue #28 preservation**
+        """
+        for type_ in TYPES_FLOORED_AT_2_0:
+            with self.subTest(type=type_):
+                with self.assertRaises(UptimeKumaException) as ctx:
+                    self._build_type("1.23.2", type_)
+                self.assertIn("2.0 or newer", str(ctx.exception))
+
+    def test_every_v2_only_type_has_a_floor(self):
+        """The mapping covers exactly the four types, each with a floor.
+
+        A type added to the mapping without a floor, or a floor added without a
+        type, fails here rather than at a caller.
+
+        **Validates: issue #28**
+        """
+        self.assertEqual(
+            dict(_V2_ONLY_MONITOR_TYPES),
+            {
+                MonitorType.RABBITMQ: "2.0",
+                MonitorType.SNMP: "2.0",
+                MonitorType.SMTP: "2.0",
+                MonitorType.SYSTEM_SERVICE: SYSTEM_SERVICE_FLOOR,
+            },
+        )
+
+    def test_unparseable_version_still_permits_every_type(self):
+        """A nightly is treated as newest, per-type floors included.
+
+        **Validates: issue #28 preservation**
+        """
+        for raw_version in (NIGHTLY_VERSION, GARBAGE_VERSION):
+            for type_ in V2_ONLY_TYPE_CASES:
+                with self.subTest(version=raw_version, type=type_):
+                    result = self._build_type(raw_version, type_)
+                    self.assertEqual(result["type"], type_)
+
+    def test_mapping_stays_private(self):
+        """The mapping is not public API, exactly as the frozenset was not.
+
+        **Validates: issue #28 preservation**
+        """
+        import uptime_kuma_api
+
+        self.assertNotIn("_V2_ONLY_MONITOR_TYPES", dir(uptime_kuma_api))
 
 
 if __name__ == "__main__":
