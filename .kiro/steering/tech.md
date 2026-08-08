@@ -13,6 +13,12 @@
   (`uptime-kuma-api2.readthedocs.io`), rebuilds on push to `main`
 - **Tests:** `pytest`
 
+That list is deliberately short, and adding to it is a real cost: this library
+is itself a transitive dependency of other people's automation (the Ansible
+collection among them), so every runtime dependency we take, they take. Solve it
+with the standard library or an already-installed package first; a new runtime
+dependency needs a reason beyond convenience.
+
 ## Version-gating idiom
 
 Server-version-specific behavior is gated so v1.x connections stay correct:
